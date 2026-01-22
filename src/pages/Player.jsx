@@ -1,589 +1,899 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, List, Info, AlertCircle, ChevronDown, MonitorPlay, Lock, Play, Pause, SkipForward, Volume2, VolumeX, Maximize, Settings } from 'lucide-react'
+import { ArrowLeft, List, Info, ChevronDown, ChevronUp, MonitorPlay, Lock, X, Play, Pause, Volume2, VolumeX, Maximize, Settings } from 'lucide-react'
 import { getDramaBosDetail, getDramaBosChapters, getDramaBosStream } from '../api/dramabos'
 import Hls from 'hls.js'
 
-// --- ENHANCED STYLES ---
-const ENHANCED_STYLES = `
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+// --- INTERNAL STYLES ---
+const INTERNAL_STYLES = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   
-  .ep-container { 
-    background: linear-gradient(to bottom, #0a0a0a 0%, #000 100%); 
-    color: #fff; 
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-    min-height: 100vh; 
-    display: flex; 
-    flex-direction: column; 
-    overflow-x: hidden;
-    position: relative;
-  }
-  
-  /* HEADER STYLES */
-  .ep-header { 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    right: 0; 
-    height: 56px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: space-between; 
-    padding: 0 12px; 
-    background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.8) 70%, transparent 100%);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid rgba(255,255,255,0.05); 
-    z-index: 1000;
-    transition: transform 0.3s ease;
-  }
-  
-  .ep-header.hidden { transform: translateY(-100%); }
-  
-  .ep-btn-icon { 
-    padding: 10px; 
-    border-radius: 12px; 
-    color: #fff; 
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-    background: rgba(255,255,255,0.08); 
-    border: none; 
-    cursor: pointer; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    min-width: 40px;
-    min-height: 40px;
-  }
-  .ep-btn-icon:active { transform: scale(0.95); background: rgba(255,255,255,0.15); }
-  
-  .ep-title-section { 
-    display: flex; 
-    flex-direction: column; 
-    flex: 1; 
-    min-width: 0; 
-    margin: 0 12px; 
-  }
-  
-  .ep-title { 
-    font-size: 15px; 
-    font-weight: 700; 
-    color: #fff; 
-    white-space: nowrap; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-    line-height: 1.3;
-    letter-spacing: -0.3px;
-  }
-  
-  .ep-episode-badge { 
-    font-size: 11px; 
-    font-weight: 600; 
-    color: #fff; 
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    padding: 3px 10px; 
-    border-radius: 6px; 
-    display: inline-block; 
-    margin-top: 3px; 
-    align-self: flex-start;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-    letter-spacing: 0.3px;
-  }
-
-  /* VIDEO SECTION */
-  .ep-main { 
-    padding-top: 56px; 
-    display: flex; 
-    flex-direction: column; 
-    min-height: 100vh;
-    position: relative;
-  }
-  
-  @media (min-width: 1024px) { 
-    .ep-main { 
-      flex-direction: row; 
-      height: 100vh;
-      overflow: hidden; 
-    } 
-  }
-
-  .ep-video-wrapper { 
-    position: relative; 
+  .sp-container { 
     background: #000; 
+    color: #fff; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+  }
+  
+  /* HEADER */
+  .sp-header { 
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 50%, transparent 100%);
+    z-index: 100;
+    transition: all 0.3s;
+  }
+  
+  .sp-header.hidden { transform: translateY(-100%); opacity: 0; }
+  
+  .sp-btn-icon { 
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
     flex-shrink: 0;
   }
   
-  .ep-video-container { 
-    width: 100%; 
-    position: relative; 
+  .sp-btn-icon:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
+  
+  .sp-title-area { 
+    flex: 1;
+    margin: 0 12px;
+    min-width: 0;
+  }
+  
+  .sp-title { 
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .sp-subtitle { 
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 2px;
+  }
+
+  /* MAIN LAYOUT */
+  .sp-main { 
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  @media (min-width: 1024px) { 
+    .sp-main { flex-direction: row; } 
+  }
+
+  /* VIDEO SECTION */
+  .sp-video-section { 
+    flex: 1;
+    position: relative;
     background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
   }
   
-  /* Mobile: Full width with 16:9 ratio */
-  @media (max-width: 1023px) {
-    .ep-video-container {
-      aspect-ratio: 16/9;
-      max-height: 56.25vw;
-    }
-  }
-  
-  /* Desktop: Fill available space */
-  @media (min-width: 1024px) { 
-    .ep-video-wrapper {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-    
-    .ep-video-container { 
-      flex: 1;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    } 
+  .sp-video-container { 
+    width: 100%;
+    height: 100%;
+    position: relative;
   }
 
-  /* VIDEO PLAYER */
-  .ep-video-player {
+  /* VIDEO WRAPPER */
+  .sp-video-wrapper { 
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .sp-video { 
     width: 100%;
     height: 100%;
     object-fit: contain;
     background: #000;
   }
-
-  /* LOADING OVERLAY */
-  .ep-loading-overlay { 
-    position: absolute; 
-    inset: 0; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center; 
-    background: rgba(0,0,0,0.85); 
-    backdrop-filter: blur(10px);
-    gap: 16px; 
-    color: #999;
+  
+  /* LOADING */
+  .sp-loading-overlay { 
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.8);
+    gap: 16px;
     z-index: 10;
   }
   
-  .ep-spinner { 
-    width: 48px; 
-    height: 48px; 
-    border: 4px solid rgba(16, 185, 129, 0.1); 
-    border-top-color: #10b981; 
-    border-radius: 50%; 
-    animation: ep-spin 0.8s linear infinite; 
+  .sp-spinner { 
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(59,130,246,0.2);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: sp-spin 1s linear infinite;
   }
   
-  @keyframes ep-spin { to { transform: rotate(360deg); } }
-  
-  .ep-loading-text {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: #10b981;
-  }
+  @keyframes sp-spin { to { transform: rotate(360deg); } }
 
-  /* INFO SECTION - MOBILE */
-  .ep-info-mobile { 
-    padding: 20px 16px;
-    background: linear-gradient(to bottom, #0a0a0a 0%, #050505 100%);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-  }
-  
-  @media (min-width: 1024px) {
-    .ep-info-mobile { display: none; }
-  }
-  
-  .ep-info-header {
+  /* CUSTOM VIDEO CONTROLS */
+  .sp-controls-overlay { 
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.8) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 20;
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 12px;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px;
+    pointer-events: none;
   }
   
-  .ep-info-main h2 { 
-    font-size: 18px; 
-    font-weight: 800; 
+  .sp-controls-overlay.visible { 
+    opacity: 1; 
+    pointer-events: auto;
+  }
+  
+  .sp-controls-overlay > * {
+    pointer-events: auto;
+  }
+  
+  /* TOP CONTROLS - REMOVED */
+  
+  /* CENTER CONTROLS */
+  .sp-center-controls { 
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    pointer-events: auto;
+  }
+  
+  @media (max-width: 768px) {
+    .sp-center-controls {
+      gap: 16px;
+    }
+  }
+  
+  .sp-control-btn { 
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255,255,255,0.3);
     color: #fff;
-    line-height: 1.3;
-    margin: 0 0 10px 0;
-    letter-spacing: -0.5px;
-  }
-  
-  .ep-tags-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  
-  .ep-tag { 
-    font-size: 11px; 
-    padding: 5px 12px; 
-    border-radius: 20px; 
-    background: rgba(255,255,255,0.06); 
-    color: #d4d4d4; 
-    border: 1px solid rgba(255,255,255,0.08);
-    font-weight: 500;
-    letter-spacing: 0.2px;
-  }
-  
-  .ep-tag-primary { 
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: #000; 
-    font-weight: 700; 
-    border: none; 
-    box-shadow: 0 2px 10px rgba(16,185,129,0.25);
-  }
-  
-  .ep-toggle-btn {
-    padding: 8px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    color: #10b981;
-    cursor: pointer;
-    transition: all 0.2s;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    min-height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   }
   
-  .ep-toggle-btn:active {
-    transform: scale(0.95);
-    background: rgba(255,255,255,0.1);
+  @media (max-width: 768px) {
+    .sp-control-btn {
+      width: 56px;
+      height: 56px;
+    }
   }
   
-  .ep-synopsis-wrapper {
-    overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  .sp-control-btn:active { 
+    transform: scale(0.9);
+    background: rgba(59,130,246,0.5);
+    border-color: #3b82f6;
   }
   
-  .ep-synopsis-wrapper.collapsed {
-    max-height: 0;
-    opacity: 0;
+  .sp-control-btn-sm { 
+    width: 48px;
+    height: 48px;
   }
   
-  .ep-synopsis-wrapper.expanded {
-    max-height: 300px;
-    opacity: 1;
+  @media (max-width: 768px) {
+    .sp-control-btn-sm {
+      width: 44px;
+      height: 44px;
+    }
   }
   
-  .ep-synopsis { 
-    font-size: 14px; 
-    color: #a3a3a3; 
-    line-height: 1.7; 
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
-
-  /* INFO SECTION - DESKTOP */
-  .ep-info-desktop { 
-    display: none;
-    position: absolute; 
-    bottom: 0; 
-    left: 0; 
-    right: 0; 
-    padding: 48px 40px 32px;
-    background: linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.9) 40%, rgba(0,0,0,0.5) 70%, transparent 100%);
-    z-index: 50; 
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-  }
-  
-  @media (min-width: 1024px) { 
-    .ep-info-desktop { display: block; } 
-  }
-  
-  .ep-info-desktop.hidden { 
-    transform: translateY(calc(100% - 80px));
-    opacity: 0.95;
-  }
-  
-  .ep-info-desktop-content {
-    max-width: 1200px;
-    margin: 0 auto;
+  /* BOTTOM CONTROLS */
+  .sp-bottom-controls { 
     display: flex;
-    align-items: flex-end;
-    gap: 32px;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
   }
   
-  .ep-cover-img { 
-    width: 120px; 
-    height: 180px; 
-    border-radius: 12px; 
-    object-fit: cover; 
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-    border: 2px solid rgba(255,255,255,0.1);
+  @media (max-width: 768px) {
+    .sp-bottom-controls {
+      gap: 8px;
+    }
+  }
+  
+  .sp-progress-container { 
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    transition: height 0.2s;
+  }
+  
+  .sp-progress-container:hover { height: 6px; }
+  
+  .sp-progress-bar { 
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+    border-radius: 2px;
+    position: relative;
+    transition: width 0.1s linear;
+  }
+  
+  .sp-progress-thumb { 
+    position: absolute;
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  
+  .sp-progress-container:hover .sp-progress-thumb { opacity: 1; }
+  
+  .sp-controls-row { 
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .sp-controls-left,
+  .sp-controls-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .sp-time { 
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    min-width: 90px;
+    white-space: nowrap;
+  }
+  
+  @media (max-width: 768px) {
+    .sp-time {
+      font-size: 11px;
+      min-width: 70px;
+    }
+  }
+  
+  .sp-control-btn-small {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
     flex-shrink: 0;
   }
   
-  .ep-info-details {
+  @media (max-width: 768px) {
+    .sp-control-btn-small {
+      width: 32px;
+      height: 32px;
+    }
+  }
+  
+  .sp-control-btn-small:active {
+    background: rgba(59,130,246,0.5);
+    border-color: #3b82f6;
+    transform: scale(0.9);
+  }
+  
+  .sp-control-btn-small.active {
+    background: rgba(59,130,246,0.7);
+    border-color: #3b82f6;
+  }
+  
+  .sp-mobile-only {
+    display: flex;
+  }
+  
+  @media (min-width: 1024px) {
+    .sp-mobile-only {
+      display: none;
+    }
+  }
+
+  /* MOBILE INFO SECTION */
+  .sp-info-mobile { 
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.9) 70%, transparent 100%);
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    z-index: 90;
+    transition: transform 0.3s;
+    max-height: 45vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .sp-info-mobile.hidden { 
+    transform: translateY(100%);
+  }
+  
+  .sp-info-header {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  
+  .sp-info-mobile-cover {
+    width: 60px;
+    height: 90px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .sp-info-header-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .sp-info-toggle-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .sp-info-toggle-btn:active {
+    background: rgba(59,130,246,0.5);
+    transform: scale(0.9);
+  }
+  
+  .sp-info-title-area {
+    flex: 1;
+  }
+  
+  .sp-info-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  
+  .sp-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  
+  .sp-tag { 
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(59,130,246,0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59,130,246,0.3);
+    font-weight: 500;
+  }
+  
+  .sp-synopsis { 
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.6;
+    max-height: 120px;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+  
+  .sp-synopsis::-webkit-scrollbar { width: 4px; }
+  .sp-synopsis::-webkit-scrollbar-track { background: transparent; }
+  .sp-synopsis::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.3); border-radius: 10px; }
+  
+  .sp-info-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  
+  .sp-btn-action {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  
+  .sp-btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+  }
+  
+  .sp-btn-primary:active {
+    transform: scale(0.98);
+  }
+  
+  @media (min-width: 1024px) {
+    .sp-info-mobile { display: none; }
+  }
+
+  /* DESKTOP SIDEBAR */
+  .sp-sidebar { 
+    display: none;
+    background: #0a0a0a;
+    border-left: 1px solid rgba(255,255,255,0.05);
+    flex-direction: column;
+  }
+  
+  @media (min-width: 1024px) { 
+    .sp-sidebar { 
+      display: flex;
+      width: 400px;
+      height: 100%;
+    }
+  }
+  
+  /* DESKTOP INFO IN SIDEBAR */
+  .sp-sidebar-info {
+    padding: 20px;
+    background: rgba(15,15,15,0.95);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    gap: 16px;
+  }
+  
+  .sp-sidebar-cover {
+    width: 80px;
+    height: 120px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .sp-sidebar-info-content {
     flex: 1;
     min-width: 0;
   }
   
-  .ep-big-title { 
-    font-size: 36px; 
-    font-weight: 900; 
-    margin-bottom: 12px; 
-    text-shadow: 0 2px 16px rgba(0,0,0,0.8);
-    letter-spacing: -1px;
-    line-height: 1.2;
+  .sp-sidebar-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    line-height: 1.3;
   }
   
-  .ep-desktop-synopsis {
-    font-size: 15px;
-    color: #d4d4d4;
-    line-height: 1.7;
-    max-width: 700px;
-    margin-top: 16px;
+  .sp-sidebar-synopsis {
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    line-height: 1.5;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+  
+  .sp-sidebar-synopsis::-webkit-scrollbar { width: 4px; }
+  .sp-sidebar-synopsis::-webkit-scrollbar-track { background: transparent; }
+  .sp-sidebar-synopsis::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.3); border-radius: 10px; }
+  
+  .sp-list-header { 
+    padding: 20px;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .sp-list-title { 
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .sp-count-badge { 
+    font-size: 11px;
+    font-family: monospace;
+    color: #3b82f6;
+    background: rgba(59,130,246,0.15);
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(59,130,246,0.3);
+    font-weight: 600;
   }
 
-  /* SIDEBAR - EPISODE LIST */
-  .ep-sidebar { 
-    background: #0a0a0a;
-    display: flex; 
-    flex-direction: column;
-    border-top: 1px solid rgba(255,255,255,0.06);
+  .sp-grid { 
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  
+  .sp-ep-btn { 
+    aspect-ratio: 1/1;
+    border-radius: 10px;
+    border: 1.5px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.5);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
-  @media (min-width: 1024px) { 
-    .ep-sidebar { 
-      width: 400px;
-      min-width: 400px;
-      max-width: 400px;
-      height: 100%;
-      border-top: none;
-      border-left: 1px solid rgba(255,255,255,0.06);
-    } 
+  .sp-ep-btn:hover:not(:disabled) { 
+    background: rgba(59,130,246,0.15);
+    color: #fff;
+    border-color: rgba(59,130,246,0.5);
+    transform: translateY(-2px);
   }
   
-  .ep-list-header { 
-    padding: 20px 16px;
-    background: rgba(10,10,10,0.98);
+  .sp-ep-btn.active { 
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    font-weight: 700;
+    border-color: transparent;
+    transform: scale(1.05);
+    box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+  }
+  
+  .sp-ep-btn:disabled { 
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  
+  .sp-active-indicator {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    animation: sp-pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes sp-pulse { 
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+  }
+
+  /* MOBILE POPUP */
+  .sp-popup-overlay { 
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.9);
     backdrop-filter: blur(10px);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    animation: sp-fade-in 0.2s ease-out;
+  }
+  
+  @media (min-width: 1024px) { .sp-popup-overlay { display: none; } }
+  
+  @keyframes sp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  .sp-popup-container {
+    background: linear-gradient(to bottom, #0f0f0f, #0a0a0a);
+    width: 100%;
+    max-height: 70vh;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    animation: sp-slide-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.8);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+  }
+  
+  @keyframes sp-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .sp-popup-header {
+    padding: 20px 16px 12px;
+    background: rgba(15,15,15,0.98);
     border-bottom: 1px solid rgba(255,255,255,0.08);
-    display: flex; 
-    align-items: center; 
+    display: flex;
+    align-items: center;
     justify-content: space-between;
     position: sticky;
     top: 0;
     z-index: 10;
   }
-  
-  .ep-list-title { 
-    font-size: 13px; 
-    font-weight: 800; 
-    color: #fff; 
-    letter-spacing: 0.5px; 
-    text-transform: uppercase; 
-    display: flex; 
-    align-items: center; 
-    gap: 10px;
-  }
-  
-  .ep-count-badge { 
-    font-size: 11px; 
-    font-family: -apple-system, monospace;
-    font-weight: 700;
-    color: #10b981; 
-    background: rgba(16,185,129,0.12); 
-    padding: 4px 12px; 
-    border-radius: 20px; 
-    border: 1px solid rgba(16,185,129,0.25);
+
+  .sp-popup-handle {
+    width: 40px;
+    height: 4px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
-  /* EPISODE GRID */
-  .ep-grid { 
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-    gap: 10px; 
-    padding: 16px;
-    overflow-y: auto; 
+  .sp-popup-list {
+    overflow-y: auto;
     flex: 1;
-    max-height: 400px;
-  }
-  
-  @media (min-width: 640px) {
-    .ep-grid {
-      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-      gap: 12px;
-    }
-  }
-  
-  @media (min-width: 1024px) { 
-    .ep-grid { 
-      max-height: none;
-      height: 100%;
-    } 
+    padding: 8px 12px 12px;
   }
 
-  /* EPISODE BUTTON */
-  .ep-episode-btn { 
-    aspect-ratio: 1/1; 
-    border-radius: 12px; 
-    border: 2px solid rgba(255,255,255,0.06); 
-    background: rgba(255,255,255,0.03); 
-    color: #999; 
-    font-size: 15px; 
-    font-weight: 600; 
-    cursor: pointer; 
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    overflow: hidden;
-  }
-  
-  .ep-episode-btn::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  
-  .ep-episode-btn:hover:not(:disabled)::before {
-    opacity: 1;
-  }
-  
-  .ep-episode-btn:hover:not(:disabled) { 
-    background: rgba(255,255,255,0.08); 
-    color: #fff; 
-    border-color: rgba(16,185,129,0.3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  }
-  
-  .ep-episode-btn:active:not(:disabled) {
-    transform: translateY(0);
-  }
-  
-  .ep-episode-btn.active { 
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: #000; 
-    font-weight: 800; 
-    border-color: #10b981;
-    transform: scale(1.08);
-    z-index: 5; 
-    box-shadow: 0 6px 24px rgba(16,185,129,0.4);
-  }
-  
-  .ep-episode-btn:disabled { 
-    opacity: 0.25; 
-    cursor: not-allowed; 
-    filter: grayscale(1);
-  }
-  
-  /* ACTIVE INDICATOR */
-  .ep-active-indicator { 
-    position: absolute; 
-    top: 4px; 
-    right: 4px; 
+  .sp-popup-ep-item {
     display: flex;
-    z-index: 1;
-  }
-  
-  .ep-ping-animation { 
-    width: 10px; 
-    height: 10px; 
-    background: #fff; 
-    border-radius: 50%; 
-    opacity: 0.75; 
-    animation: ep-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite; 
-    position: absolute; 
-  }
-  
-  .ep-dot { 
-    width: 10px; 
-    height: 10px; 
-    background: #fff; 
-    border-radius: 50%; 
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
     position: relative;
-    box-shadow: 0 0 8px rgba(255,255,255,0.5);
-  }
-  
-  @keyframes ep-ping { 
-    75%, 100% { 
-      transform: scale(2.5); 
-      opacity: 0; 
-    } 
   }
 
-  /* LOCK ICON */
-  .ep-lock-icon {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    opacity: 0.5;
+  .sp-popup-ep-item:active {
+    transform: scale(0.98);
   }
 
-  /* SCROLLBAR CUSTOM */
-  .ep-custom-scroll::-webkit-scrollbar { 
-    width: 6px; 
-  }
-  
-  .ep-custom-scroll::-webkit-scrollbar-track { 
-    background: transparent; 
-  }
-  
-  .ep-custom-scroll::-webkit-scrollbar-thumb { 
-    background: rgba(16,185,129,0.3);
-    border-radius: 10px; 
-  }
-  
-  .ep-custom-scroll::-webkit-scrollbar-thumb:hover { 
-    background: rgba(16,185,129,0.5);
+  .sp-popup-ep-item.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: transparent;
+    box-shadow: 0 4px 16px rgba(59,130,246,0.4);
   }
 
-  /* RESPONSIVE ADJUSTMENTS */
-  @media (max-width: 640px) {
-    .ep-header { height: 52px; padding: 0 10px; }
-    .ep-main { padding-top: 52px; }
-    .ep-btn-icon { padding: 8px; min-width: 36px; min-height: 36px; }
-    .ep-title { font-size: 14px; }
-    .ep-episode-badge { font-size: 10px; padding: 2px 8px; }
-    .ep-info-mobile { padding: 16px 12px; }
-    .ep-info-main h2 { font-size: 16px; }
-    .ep-tag { font-size: 10px; padding: 4px 10px; }
-    .ep-synopsis { font-size: 13px; }
+  .sp-popup-ep-item:not(.active):hover {
+    background: rgba(59,130,246,0.1);
+    border-color: rgba(59,130,246,0.3);
+  }
+
+  .sp-popup-ep-item.locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .sp-popup-ep-number {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    flex-shrink: 0;
+    box-shadow: inset 0 1px 2px rgba(255,255,255,0.05);
+  }
+
+  .sp-popup-ep-item.active .sp-popup-ep-number {
+    background: rgba(0,0,0,0.2);
+    border-color: rgba(255,255,255,0.15);
+    color: #fff;
+  }
+
+  .sp-popup-ep-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sp-popup-ep-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sp-popup-ep-meta {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sp-popup-ep-item.active .sp-popup-ep-meta {
+    color: rgba(255,255,255,0.8);
+  }
+
+  .sp-popup-ep-badge {
+    background: rgba(59,130,246,0.2);
+    color: #60a5fa;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .sp-popup-ep-item.active .sp-popup-ep-badge {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+  }
+
+  /* SCROLLBAR */
+  .custom-scroll::-webkit-scrollbar { width: 6px; }
+  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+  .custom-scroll::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.3); border-radius: 10px; }
+  .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.5); }
+  
+  /* SETTINGS POPUP */
+  .sp-settings-popup {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 180px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    animation: sp-scale-in 0.2s ease-out;
+    z-index: 150;
   }
   
-  /* LANDSCAPE MODE ON MOBILE */
-  @media (max-width: 1023px) and (orientation: landscape) {
-    .ep-header { display: none; }
-    .ep-main { padding-top: 0; }
-    .ep-video-container { 
-      height: 100vh;
-      max-height: 100vh;
-      aspect-ratio: auto;
+  @media (min-width: 1024px) {
+    .sp-settings-popup {
+      position: fixed;
+      top: auto;
+      bottom: 80px;
+      right: 430px;
     }
-    .ep-info-mobile { display: none; }
-    .ep-sidebar { display: none; }
   }
-
-  /* SMOOTH TRANSITIONS */
-  * {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  
+  @keyframes sp-scale-in {
+    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  
+  .sp-settings-header {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .sp-settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #fff;
+    font-size: 14px;
+  }
+  
+  .sp-settings-item:hover {
+    background: rgba(255,255,255,0.1);
+  }
+  
+  .sp-settings-item.active {
+    background: rgba(59,130,246,0.2);
+    color: #60a5fa;
+  }
+  
+  .sp-settings-value {
+    color: #3b82f6;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  
+  .sp-settings-item.active .sp-settings-value {
+    color: #60a5fa;
   }
 `
 
-// --- INTERNAL VIDEO PLAYER COMPONENT ---
-function InternalVideoPlayer({ src, poster, onEnded }) {
+// --- VIDEO PLAYER COMPONENT ---
+function InternalVideoPlayer({ src, poster, onEnded, onToggleInfo, showInfo, playbackRate = 1, onOpenSettings }) {
     const videoRef = useRef(null)
     const hlsRef = useRef(null)
+    const containerRef = useRef(null)
+    const [playing, setPlaying] = useState(false)
+    const [muted, setMuted] = useState(false)
+    const [currentTime, setCurrentTime] = useState(0)
+    const [duration, setDuration] = useState(0)
+    const [showControls, setShowControls] = useState(true)
+    const hideControlsTimeout = useRef(null)
 
     useEffect(() => {
         const video = videoRef.current
@@ -595,12 +905,7 @@ function InternalVideoPlayer({ src, poster, onEnded }) {
         }
 
         if (Hls.isSupported() && (src.includes('.m3u8') || src.includes('.m3u'))) {
-            const hls = new Hls({
-                debug: false,
-                enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 90
-            })
+            const hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true })
             hlsRef.current = hls
             hls.loadSource(src)
             hls.attachMedia(video)
@@ -623,16 +928,145 @@ function InternalVideoPlayer({ src, poster, onEnded }) {
         return () => hlsRef.current?.destroy()
     }, [src])
 
+    useEffect(() => {
+        const video = videoRef.current
+        if (!video) return
+
+        const updateTime = () => setCurrentTime(video.currentTime)
+        const updateDuration = () => setDuration(video.duration)
+        const handlePlay = () => setPlaying(true)
+        const handlePause = () => setPlaying(false)
+
+        video.addEventListener('timeupdate', updateTime)
+        video.addEventListener('loadedmetadata', updateDuration)
+        video.addEventListener('play', handlePlay)
+        video.addEventListener('pause', handlePause)
+        video.addEventListener('ended', onEnded)
+
+        return () => {
+            video.removeEventListener('timeupdate', updateTime)
+            video.removeEventListener('loadedmetadata', updateDuration)
+            video.removeEventListener('play', handlePlay)
+            video.removeEventListener('pause', handlePause)
+            video.removeEventListener('ended', onEnded)
+        }
+    }, [onEnded])
+
+    useEffect(() => {
+        const video = videoRef.current
+        if (video) {
+            video.playbackRate = playbackRate
+        }
+    }, [playbackRate])
+
+    const togglePlay = () => {
+        const video = videoRef.current
+        if (!video) return
+        if (video.paused) video.play()
+        else video.pause()
+    }
+
+    const toggleMute = () => {
+        const video = videoRef.current
+        if (!video) return
+        video.muted = !video.muted
+        setMuted(video.muted)
+    }
+
+    const toggleFullscreen = () => {
+        if (containerRef.current) {
+            if (document.fullscreenElement) {
+                document.exitFullscreen()
+            } else {
+                containerRef.current.requestFullscreen()
+            }
+        }
+    }
+
+    const handleProgressClick = (e) => {
+        const video = videoRef.current
+        if (!video) return
+        const rect = e.currentTarget.getBoundingClientRect()
+        const pos = (e.clientX - rect.left) / rect.width
+        video.currentTime = pos * video.duration
+    }
+
+    const formatTime = (seconds) => {
+        if (!seconds || isNaN(seconds)) return '0:00'
+        const mins = Math.floor(seconds / 60)
+        const secs = Math.floor(seconds % 60)
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+
+    const handleInteraction = () => {
+        setShowControls(true)
+        if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current)
+        hideControlsTimeout.current = setTimeout(() => {
+            if (playing) setShowControls(false)
+        }, 3000)
+    }
+
     return (
-        <video
-            ref={videoRef}
-            controls
-            playsInline
-            controlsList="nodownload"
-            onEnded={onEnded}
-            poster={poster}
-            className="ep-video-player"
-        />
+        <div
+            ref={containerRef}
+            className="sp-video-wrapper"
+            onMouseMove={handleInteraction}
+            onTouchStart={handleInteraction}
+            onClick={togglePlay}
+        >
+            <video
+                ref={videoRef}
+                className="sp-video"
+                playsInline
+                poster={poster}
+            />
+            <div className={`sp-controls-overlay ${showControls ? 'visible' : ''}`}>
+                <div className="sp-center-controls">
+                    <button className="sp-control-btn" onClick={(e) => { e.stopPropagation(); togglePlay(); }}>
+                        {playing ? <Pause size={28} /> : <Play size={28} style={{ marginLeft: '3px' }} />}
+                    </button>
+                </div>
+
+                <div className="sp-bottom-controls" onClick={(e) => e.stopPropagation()}>
+                    <div className="sp-progress-container" onClick={handleProgressClick}>
+                        <div className="sp-progress-bar" style={{ width: `${(currentTime / duration) * 100 || 0}%` }}>
+                            <div className="sp-progress-thumb"></div>
+                        </div>
+                    </div>
+                    <div className="sp-controls-row">
+                        <div className="sp-controls-left">
+                            <span className="sp-time">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                        </div>
+                        <div className="sp-controls-right">
+                            <button
+                                className="sp-control-btn-small sp-mobile-only"
+                                onClick={onToggleInfo}
+                                title="Toggle Info"
+                            >
+                                <Info size={16} />
+                            </button>
+                            <button
+                                className="sp-control-btn-small"
+                                onClick={toggleMute}
+                                title="Mute/Unmute"
+                            >
+                                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                            </button>
+                            <button
+                                className="sp-control-btn-small"
+                                onClick={onOpenSettings}
+                                title="Pengaturan"
+                            >
+                                <Settings size={16} />
+                            </button>
+                            <button className="sp-control-btn-small" onClick={toggleFullscreen}>
+                                <Maximize size={16} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     )
 }
 
@@ -641,62 +1075,97 @@ function InternalEpisodeList({ episodes, currentEpisode, onEpisodeSelect }) {
     const activeRef = useRef(null)
 
     useEffect(() => {
-        if (activeRef.current) {
-            activeRef.current.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'center'
-            })
-        }
+        activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, [currentEpisode])
 
-    if (!episodes?.length) {
-        return (
-            <div style={{
-                padding: '40px 20px',
-                textAlign: 'center',
-                color: '#666',
-                fontSize: '13px',
-                fontWeight: 600
-            }}>
-                <MonitorPlay size={32} style={{ opacity: 0.3, margin: '0 auto 12px' }} />
-                TIDAK ADA EPISODE
-            </div>
-        )
-    }
+    if (!episodes?.length) return <div style={{ padding: '40px', textAlign: 'center', color: '#666', fontSize: '14px' }}>Tidak ada episode</div>
 
     return (
-        <div className="ep-grid ep-custom-scroll">
+        <div className="sp-grid custom-scroll">
             {episodes.map((item, idx) => {
                 const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
                 const isLocked = item.isLock
-
                 return (
                     <button
                         key={idx}
                         ref={isActive ? activeRef : null}
                         disabled={isLocked}
-                        onClick={() => !isLocked && onEpisodeSelect(item)}
-                        className={`ep-episode-btn ${isActive ? 'active' : ''}`}
-                        aria-label={`Episode ${item.episodeNo}`}
+                        onClick={() => onEpisodeSelect(item)}
+                        className={`sp-ep-btn ${isActive ? 'active' : ''}`}
                     >
-                        {isActive && (
-                            <div className="ep-active-indicator">
-                                <span className="ep-ping-animation"></span>
-                                <span className="ep-dot"></span>
-                            </div>
-                        )}
-                        {isLocked && (
-                            <Lock
-                                size={14}
-                                className="ep-lock-icon"
-                                strokeWidth={2.5}
-                            />
-                        )}
+                        {isActive && <div className="sp-active-indicator"></div>}
+                        {isLocked && <Lock size={14} color="rgba(255,255,255,0.3)" style={{ position: 'absolute', top: 6, right: 6 }} />}
                         {item.episodeNo}
                     </button>
                 )
             })}
+        </div>
+    )
+}
+
+// --- MOBILE POPUP COMPONENT ---
+function MobileEpisodePopup({ episodes, currentEpisode, onEpisodeSelect, onClose }) {
+    const activeRef = useRef(null)
+
+    useEffect(() => {
+        activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, [currentEpisode])
+
+    if (!episodes?.length) return null
+
+    return (
+        <div className="sp-popup-overlay" onClick={onClose}>
+            <div className="sp-popup-container" onClick={(e) => e.stopPropagation()}>
+                <div className="sp-popup-handle"></div>
+                <div className="sp-popup-header">
+                    <div className="sp-list-title">
+                        <List size={16} color="#3b82f6" />
+                        Episode
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="sp-count-badge">{episodes.length}</span>
+                        <button onClick={onClose} className="sp-btn-icon" style={{ width: '32px', height: '32px' }}>
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+                <div className="sp-popup-list custom-scroll">
+                    {episodes.map((item, idx) => {
+                        const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
+                        const isLocked = item.isLock
+                        return (
+                            <div
+                                key={idx}
+                                ref={isActive ? activeRef : null}
+                                className={`sp-popup-ep-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
+                                onClick={() => {
+                                    if (!isLocked) {
+                                        onEpisodeSelect(item)
+                                        onClose()
+                                    }
+                                }}
+                            >
+                                <div className="sp-popup-ep-number">
+                                    {isLocked ? (
+                                        <Lock size={20} color="rgba(255,255,255,0.4)" />
+                                    ) : (
+                                        <span>{item.episodeNo}</span>
+                                    )}
+                                </div>
+                                <div className="sp-popup-ep-info">
+                                    <div className="sp-popup-ep-title">
+                                        {item.title || `Episode ${item.episodeNo}`}
+                                    </div>
+                                    <div className="sp-popup-ep-meta">
+                                        {isActive && <span className="sp-popup-ep-badge">Sedang Diputar</span>}
+                                        {isLocked && <span>🔒 Terkunci</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
         </div>
     )
 }
@@ -706,7 +1175,6 @@ export default function Player() {
     const { source, id: bookId } = useParams()
     const navigate = useNavigate()
 
-    // State Management
     const [loading, setLoading] = useState(true)
     const [detail, setDetail] = useState(null)
     const [episodes, setEpisodes] = useState([])
@@ -714,340 +1182,318 @@ export default function Player() {
     const [streamUrl, setStreamUrl] = useState(null)
     const [videoLoading, setVideoLoading] = useState(false)
     const [error, setError] = useState(null)
-    const [showSynopsis, setShowSynopsis] = useState(true)
-    const [headerVisible, setHeaderVisible] = useState(true)
+    const [showInfo, setShowInfo] = useState(true)
+    const [showMobilePopup, setShowMobilePopup] = useState(false)
+    const [showSettings, setShowSettings] = useState(false)
+    const [playbackSpeed, setPlaybackSpeed] = useState(1)
 
-    // Initialize Data
+    // Close settings when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (showSettings && !e.target.closest('.sp-settings-popup') && !e.target.closest('.sp-control-btn-small')) {
+                setShowSettings(false)
+            }
+        }
+        document.addEventListener('click', handleClickOutside)
+        return () => document.removeEventListener('click', handleClickOutside)
+    }, [showSettings])
+
     useEffect(() => {
         const init = async () => {
             setLoading(true)
             try {
-                if (source !== 'dramabos') {
-                    throw new Error("Sumber tidak didukung")
-                }
+                if (source !== 'dramabos') throw new Error("Sumber tidak didukung")
 
-                const [detailData, chaptersData] = await Promise.all([
+                const [d, c] = await Promise.all([
                     getDramaBosDetail(bookId),
                     getDramaBosChapters(bookId)
                 ])
 
-                if (!detailData) {
-                    throw new Error("Gagal mengambil detail drama")
+                console.log('=== DEBUG DETAIL DATA ===')
+                console.log('Raw response d:', d)
+                console.log('Type of d:', typeof d)
+                console.log('Is array?:', Array.isArray(d))
+                if (d) {
+                    console.log('d.cover:', d.cover)
+                    console.log('d.bookName:', d.bookName)
+                    console.log('Keys in d:', Object.keys(d))
                 }
+                console.log('========================')
 
-                setDetail(detailData)
+                if (!d) throw new Error("Gagal mengambil detail")
+                setDetail(d)
 
-                // Process Episodes
-                let processedEpisodes = []
-                if (chaptersData && Array.isArray(chaptersData)) {
-                    processedEpisodes = chaptersData
-                        .map((item, idx) => ({
-                            ...item,
-                            internalIndex: idx,
-                            title: item.chapterName || `Episode ${idx + 1}`,
-                            episodeNo: String(idx + 1),
-                            bestUrl: findBestQualityInCdnList(item.cdnList)
-                        }))
-                        .sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
+                let processedEps = []
+                if (c && Array.isArray(c)) {
+                    processedEps = c.map((item, idx) => ({
+                        ...item,
+                        internalIndex: idx,
+                        title: item.chapterName || `Episode ${idx + 1}`,
+                        episodeNo: String(idx + 1),
+                        bestUrl: findBestQualityInCdnList(item.cdnList)
+                    })).sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
                 }
+                setEpisodes(processedEps)
 
-                setEpisodes(processedEpisodes)
-
-                // Auto-play first episode
-                if (processedEpisodes.length > 0) {
-                    playEpisode(processedEpisodes[0])
-                }
+                if (processedEps.length > 0) playEpisode(processedEps[0])
             } catch (err) {
-                console.error('Init error:', err)
                 setError(err.message)
             } finally {
                 setLoading(false)
             }
         }
-
         init()
     }, [bookId, source])
 
-    // Find Best Quality URL
     const findBestQualityInCdnList = (cdnList) => {
         if (!cdnList?.length) return null
-
         for (const cdn of cdnList) {
             if (cdn.videoPathList) {
-                // Try 1080p first
                 const q1080 = cdn.videoPathList.find(v => v.quality === 1080)
                 if (q1080) return q1080.videoPath
-
-                // Then 720p
                 const q720 = cdn.videoPathList.find(v => v.quality === 720)
                 if (q720) return q720.videoPath
-
-                // Finally default or first available
-                const qDefault = cdn.videoPathList.find(v => v.isDefault) || cdn.videoPathList[0]
-                if (qDefault) return qDefault.videoPath
+                const qDef = cdn.videoPathList.find(v => v.isDefault) || cdn.videoPathList[0]
+                if (qDef) return qDef.videoPath
             }
         }
         return null
     }
 
-    // Play Episode Function
     const playEpisode = async (episode) => {
         if (!episode) return
-
         setCurrentEp(episode)
         setVideoLoading(true)
         setStreamUrl(null)
 
         try {
-            // Priority 1: Use CDN URL if available
             if (episode.bestUrl) {
                 setStreamUrl(episode.bestUrl)
                 setVideoLoading(false)
                 return
             }
-
-            // Priority 2: Fetch from API
             const targetIndex = (episode.chapterIndex !== undefined && episode.chapterIndex !== null)
                 ? episode.chapterIndex
                 : (episode.internalIndex + 1)
 
             const url = await getDramaBosStream(bookId, targetIndex)
-
             if (url) {
                 setStreamUrl(url)
             } else if (episode.internalIndex === 0 && detail?.videoPath) {
-                // Fallback to detail video path for first episode
                 setStreamUrl(detail.videoPath)
             }
-        } catch (err) {
-            console.error('Play episode error:', err)
+        } catch (e) {
+            console.error(e)
         } finally {
             setVideoLoading(false)
         }
     }
 
-    // Handle Next Episode
     const handleNext = () => {
         if (!episodes || !currentEp) return
-
         const currentIdx = episodes.findIndex(e => e.chapterIndex === currentEp.chapterIndex)
-
         if (currentIdx >= 0 && currentIdx < episodes.length - 1) {
-            const nextEp = episodes[currentIdx + 1]
-            if (!nextEp.isLock) {
-                playEpisode(nextEp)
-            }
+            playEpisode(episodes[currentIdx + 1])
         }
     }
 
-    // Loading State
-    if (loading && !detail) {
-        return (
-            <div style={{
-                background: '#000',
-                color: '#fff',
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '20px'
-            }}>
-                <div className="ep-spinner"></div>
-                <span className="ep-loading-text">Memuat Drama...</span>
-            </div>
-        )
-    }
+    if (loading && !detail) return (
+        <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="sp-spinner"></div>
+        </div>
+    )
 
-    // Error State
-    if (error) {
-        return (
-            <div style={{
-                background: '#000',
-                color: '#fff',
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '20px',
-                textAlign: 'center'
-            }}>
-                <AlertCircle size={48} color="#ef4444" style={{ marginBottom: '16px' }} />
-                <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Terjadi Kesalahan</h2>
-                <p style={{ color: '#999', marginBottom: '24px' }}>{error}</p>
-                <button
-                    onClick={() => navigate('/')}
-                    style={{
-                        padding: '12px 32px',
-                        borderRadius: '12px',
-                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                        color: '#fff',
-                        border: 'none',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                    }}
-                >
-                    KEMBALI KE BERANDA
-                </button>
-            </div>
-        )
-    }
+    if (error) return (
+        <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
+            <div style={{ fontSize: '18px', marginBottom: '20px' }}>{error}</div>
+            <button onClick={() => navigate('/')} className="sp-btn-primary" style={{ padding: '12px 24px', borderRadius: '8px' }}>Kembali</button>
+        </div>
+    )
 
     return (
         <>
-            <style>{ENHANCED_STYLES}</style>
+            <style>{INTERNAL_STYLES}</style>
 
-            <div className="ep-container">
-                {/* HEADER */}
-                <header className={`ep-header ${!headerVisible ? 'hidden' : ''}`}>
-                    <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="ep-btn-icon"
-                            aria-label="Kembali"
-                        >
-                            <ArrowLeft size={20} strokeWidth={2.5} />
-                        </button>
-
-                        <div className="ep-title-section">
-                            <h1 className="ep-title">{detail?.bookName}</h1>
-                            <span className="ep-episode-badge">
-                                {currentEp ? `EP ${currentEp.episodeNo}` : 'MEMUAT...'}
-                            </span>
-                        </div>
+            <div className="sp-container">
+                <header className="sp-header">
+                    <button onClick={() => navigate(-1)} className="sp-btn-icon">
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="sp-title-area">
+                        <div className="sp-title">{detail?.bookName}</div>
+                        <div className="sp-subtitle">EP.{currentEp?.episodeNo || '...'}</div>
                     </div>
+                    <div style={{ width: '40px' }}></div>
                 </header>
 
-                {/* MAIN CONTENT */}
-                <div className="ep-main">
-                    {/* VIDEO SECTION */}
-                    <div className="ep-video-wrapper">
-                        <div className="ep-video-container">
+                <div className="sp-main">
+                    <div className="sp-video-section">
+                        <div className="sp-video-container">
                             {streamUrl ? (
                                 <InternalVideoPlayer
                                     key={streamUrl}
                                     src={streamUrl}
                                     poster={detail?.cover}
                                     onEnded={handleNext}
+                                    onToggleInfo={() => setShowInfo(!showInfo)}
+                                    showInfo={showInfo}
+                                    playbackRate={playbackSpeed}
+                                    onOpenSettings={() => setShowSettings(!showSettings)}
                                 />
                             ) : (
-                                <div className="ep-loading-overlay">
+                                <div className="sp-loading-overlay">
                                     {videoLoading ? (
                                         <>
-                                            <div className="ep-spinner"></div>
-                                            <span className="ep-loading-text">Memuat Video...</span>
+                                            <div className="sp-spinner"></div>
+                                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: '12px' }}>Memuat video...</span>
                                         </>
                                     ) : (
                                         <>
-                                            <MonitorPlay size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#666' }}>
-                                                VIDEO TIDAK TERSEDIA
-                                            </span>
+                                            <MonitorPlay size={48} opacity={0.3} />
+                                            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: '12px' }}>Video tidak tersedia</span>
                                         </>
                                     )}
                                 </div>
                             )}
-                        </div>
 
-                        {/* DESKTOP INFO OVERLAY */}
-                        <div className={`ep-info-desktop ${!showSynopsis ? 'hidden' : ''}`}>
-                            <div className="ep-info-desktop-content">
-                                <img
-                                    src={detail?.cover}
-                                    className="ep-cover-img"
-                                    alt={detail?.bookName}
-                                    loading="lazy"
-                                />
-
-                                <div className="ep-info-details">
-                                    <h2 className="ep-big-title">{detail?.bookName}</h2>
-
-                                    <div className="ep-tags-row">
-                                        <span className="ep-tag ep-tag-primary">
-                                            EP {currentEp?.episodeNo}
-                                        </span>
-                                        {detail?.tags?.slice(0, 4).map((tag, i) => (
-                                            <span key={i} className="ep-tag">{tag}</span>
-                                        ))}
-                                    </div>
-
-                                    <p className="ep-desktop-synopsis">
-                                        {detail?.introduction || 'Tidak ada sinopsis tersedia'}
-                                    </p>
+                            {/* SETTINGS POPUP */}
+                            {showSettings && (
+                                <div className="sp-settings-popup">
+                                    <div className="sp-settings-header">Kecepatan</div>
+                                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
+                                        <div
+                                            key={speed}
+                                            className={`sp-settings-item ${playbackSpeed === speed ? 'active' : ''}`}
+                                            onClick={() => {
+                                                setPlaybackSpeed(speed)
+                                                setShowSettings(false)
+                                            }}
+                                        >
+                                            <span>{speed === 1 ? 'Normal' : `${speed}x`}</span>
+                                            {playbackSpeed === speed && <span className="sp-settings-value">✓</span>}
+                                        </div>
+                                    ))}
                                 </div>
-
-                                <button
-                                    className="ep-btn-icon"
-                                    onClick={() => setShowSynopsis(!showSynopsis)}
-                                    aria-label="Toggle synopsis"
-                                    style={{ marginBottom: '8px' }}
-                                >
-                                    <ChevronDown
-                                        size={24}
-                                        style={{
-                                            transform: showSynopsis ? 'rotate(0deg)' : 'rotate(180deg)',
-                                            transition: 'transform 0.3s ease'
-                                        }}
-                                    />
-                                </button>
-                            </div>
+                            )}
                         </div>
 
                         {/* MOBILE INFO */}
-                        <div className="ep-info-mobile">
-                            <div className="ep-info-header">
-                                <div className="ep-info-main">
-                                    <h2>{detail?.bookName}</h2>
-                                    <div className="ep-tags-row">
-                                        <span className="ep-tag ep-tag-primary">Drama</span>
-                                        {detail?.tags?.slice(0, 3).map((tag, i) => (
-                                            <span key={i} className="ep-tag">{tag}</span>
-                                        ))}
+                        <div className={`sp-info-mobile ${!showInfo ? 'hidden' : ''}`}>
+                            <div className="sp-info-header">
+                                {detail?.cover && detail.cover.trim() !== '' ? (
+                                    <img
+                                        src={detail.cover}
+                                        className="sp-info-mobile-cover"
+                                        alt={detail?.bookName || ''}
+                                        crossOrigin="anonymous"
+                                        referrerPolicy="no-referrer"
+                                        onError={(e) => {
+                                            console.error('Mobile cover failed to load:', detail.cover)
+                                            e.target.style.display = 'none'
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="sp-info-mobile-cover" style={{
+                                        background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.3))',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '24px',
+                                        fontWeight: '700',
+                                        color: 'rgba(255,255,255,0.5)'
+                                    }}>
+                                        {detail?.bookName?.charAt(0) || '?'}
+                                    </div>
+                                )}
+                                <div className="sp-info-header-content">
+                                    <div className="sp-info-title">{detail?.bookName}</div>
+                                    <div className="sp-tags">
+                                        <span className="sp-tag">EP {currentEp?.episodeNo}</span>
+                                        {detail?.tags?.slice(0, 2).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
                                     </div>
                                 </div>
-
-                                <button
-                                    onClick={() => setShowSynopsis(!showSynopsis)}
-                                    className="ep-toggle-btn"
-                                    aria-label="Toggle synopsis"
-                                >
-                                    {showSynopsis ? (
-                                        <ChevronDown size={18} strokeWidth={2.5} />
-                                    ) : (
-                                        <Info size={18} strokeWidth={2.5} />
-                                    )}
+                                <button className="sp-info-toggle-btn" onClick={() => setShowInfo(!showInfo)}>
+                                    {showInfo ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
                                 </button>
                             </div>
-
-                            <div className={`ep-synopsis-wrapper ${showSynopsis ? 'expanded' : 'collapsed'}`}>
-                                <p className="ep-synopsis">
-                                    {detail?.introduction || 'Sinopsis tidak tersedia'}
-                                </p>
+                            <div className="sp-synopsis">
+                                {detail?.introduction || 'Deskripsi tidak tersedia'}
+                            </div>
+                            <div className="sp-info-actions">
+                                <button className="sp-btn-action sp-btn-primary" onClick={() => setShowMobilePopup(true)}>
+                                    <List size={18} />
+                                    Daftar Episode
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* EPISODE LIST SIDEBAR */}
-                    <div className="ep-sidebar">
-                        <div className="ep-list-header">
-                            <div className="ep-list-title">
-                                <List size={16} color="#10b981" strokeWidth={2.5} />
-                                <span>Episode</span>
+                    {/* DESKTOP SIDEBAR */}
+                    <div className="sp-sidebar">
+                        {/* INFO SECTION */}
+                        <div className="sp-sidebar-info">
+                            {detail?.cover && detail.cover.trim() !== '' ? (
+                                <img
+                                    src={detail.cover}
+                                    className="sp-sidebar-cover"
+                                    alt={detail?.bookName || ''}
+                                    crossOrigin="anonymous"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                        console.error('Desktop cover failed to load:', detail.cover)
+                                        e.target.style.display = 'none'
+                                    }}
+                                />
+                            ) : (
+                                <div className="sp-sidebar-cover" style={{
+                                    background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.3))',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '36px',
+                                    fontWeight: '700',
+                                    color: 'rgba(255,255,255,0.5)'
+                                }}>
+                                    {detail?.bookName?.charAt(0) || '?'}
+                                </div>
+                            )}
+                            <div className="sp-sidebar-info-content">
+                                <div className="sp-sidebar-title">{detail?.bookName}</div>
+                                <div className="sp-tags" style={{ marginBottom: '8px' }}>
+                                    <span className="sp-tag">EP {currentEp?.episodeNo}</span>
+                                    {detail?.tags?.slice(0, 2).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
+                                </div>
+                                <div className="sp-sidebar-synopsis">
+                                    {detail?.introduction || 'Deskripsi tidak tersedia'}
+                                </div>
                             </div>
-                            <span className="ep-count-badge">
-                                {episodes.length} VIDEO
-                            </span>
                         </div>
 
+                        {/* EPISODE LIST */}
+                        <div className="sp-list-header">
+                            <div className="sp-list-title">
+                                <List size={18} color="#3b82f6" />
+                                Episode
+                            </div>
+                            <span className="sp-count-badge">{episodes.length}</span>
+                        </div>
                         <InternalEpisodeList
                             episodes={episodes}
                             currentEpisode={currentEp}
-                            onEpisodeSelect={playEpisode}
+                            onEpisodeSelect={(ep) => playEpisode(ep)}
                         />
                     </div>
                 </div>
+
+                {/* MOBILE POPUP */}
+                {showMobilePopup && (
+                    <MobileEpisodePopup
+                        episodes={episodes}
+                        currentEpisode={currentEp}
+                        onEpisodeSelect={(ep) => playEpisode(ep)}
+                        onClose={() => setShowMobilePopup(false)}
+                    />
+                )}
             </div>
         </>
     )
