@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import { getDramaBoxLatest, getDramaBoxTrending, getDramaBoxDubIndo, getDramaBoxVIP, getDramaBoxForYou, getFlickLatest, getNetShort, getMelolo } from "../api/sansekai"
+// import { getFlickLatest, getNetShort, getMelolo } from "../api/sansekai"
+import { getDramaBosForYou, getDramaBosNew, getDramaBosRank } from "../api/dramabos"
 import DramaCard from "../components/DramaCard"
 import "../index.css"
 
@@ -34,50 +35,30 @@ export default function Home() {
         const fetchData = async () => {
             setLoading(true)
             // 1. Fetch All
-            // Dramabox Specifics
-            const [dLatest, dTrending, dDub, dVip, dForYou] = await Promise.all([
-                getDramaBoxLatest(),
-                getDramaBoxTrending(),
-                getDramaBoxDubIndo(),
-                getDramaBoxVIP(),
-                getDramaBoxForYou()
+            // Dramabox (New API)
+            const [dForYou, dNew, dRank] = await Promise.all([
+                getDramaBosForYou(),
+                getDramaBosNew(),
+                getDramaBosRank()
             ])
 
-            const mapDrama = (list, extraTags = []) =>
+            const mapDramaBos = (list, extraTags = []) =>
                 Array.isArray(list) ? list.map(item => ({
                     ...item,
-                    source: 'dramabox',
+                    title: item.bookName, // Map bookName to title
+                    id: item.bookId,      // Ensure ID is standard
+                    source: 'dramabos',   // New source identifier
                     tags: [...(item.tags || []), ...extraTags]
                 })) : []
 
             const dramaData = [
-                ...mapDrama(dLatest),
-                ...mapDrama(dTrending, ['Trending', 'Sedang Hangat']),
-                ...mapDrama(dDub, ['Dubbing', 'Sulih Suara']),
-                ...mapDrama(dVip, ['VIP']),
-                ...mapDrama(dForYou, ['For You', 'Rekomendasi'])
+                ...mapDramaBos(dForYou, ['Rekomendasi', 'For You']),
+                ...mapDramaBos(dNew, ['Terbaru', 'New']),
+                ...mapDramaBos(dRank, ['Trending', 'Peringkat', 'Sedang Hangat'])
             ]
 
-            await new Promise(r => setTimeout(r, 300))
-            const f = await getFlickLatest()
-            const flickData = f.map(item => ({ ...item, source: 'flickreels' }))
-
-            await new Promise(r => setTimeout(r, 300))
-            const m = await getMelolo()
-            const meloloData = m.map(item => ({ ...item, source: 'melolo' }))
-
-            await new Promise(r => setTimeout(r, 300))
-            const n = await getNetShort()
-            const netshortData = Array.isArray(n) ? n.flatMap(c =>
-                (c.contentInfos || []).map(item => ({
-                    ...item,
-                    source: 'netshort',
-                    categoryName: c.contentName
-                }))
-            ) : []
-
             // 2. Flatten Everything & Dedup
-            const combinedRaw = [...dramaData, ...flickData, ...meloloData, ...netshortData]
+            const combinedRaw = [...dramaData]
 
             // Unique by source + id to prevent duplicates from multiple lists
             const allItems = []

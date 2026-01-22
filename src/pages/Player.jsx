@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { getNetShortEpisodes, getItemById } from "../api/sansekai"
+import { getDramaBosDetail, getDramaBosChapters, getDramaBosStream } from "../api/dramabos"
 import VideoPlayer from "../components/VideoPlayer"
 import EpisodeList from "../components/EpisodeList"
 
@@ -8,6 +9,7 @@ export default function Player() {
     const { source, id } = useParams()
     const [episodes, setEpisodes] = useState([])
     const [current, setCurrent] = useState(null)
+    const [currentStreamUrl, setCurrentStreamUrl] = useState(null)
     const [meta, setMeta] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -36,8 +38,66 @@ export default function Player() {
                     setError("Konten ini belum memiliki episode yang tersedia.")
                 }
             } else if (source === 'dramabox' && item?.videoPath) {
-                // Experimental support
+                // Legacy Dramabox support
                 setCurrent({ playVoucher: item.videoPath, title: item.title })
+            } else if (source === 'dramabos') {
+                // 1. Fetch Full Detail
+                const detail = await getDramaBosDetail(id)
+                let fullChapterList = []
+
+                if (detail) {
+                    setMeta({
+                        ...detail,
+                        title: detail.bookName,
+                        cover: detail.cover
+                    })
+                    if (detail.chapterList) fullChapterList = detail.chapterList
+                }
+
+                // 2. Try Fetch All Chapters (to ensure we get 1 to End)
+                // Some APIs limit detail's chapter list.
+                const allChapters = await getDramaBosChapters(id)
+                if (allChapters && allChapters.length > fullChapterList.length) {
+                    fullChapterList = allChapters
+                }
+
+                // 3. Map Chapters
+                if (fullChapterList.length > 0) {
+                    // Sort by chapterIndex to be safe
+                    fullChapterList.sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
+
+                    const mapped = fullChapterList.map(c => {
+                        // Helper to extract best quality
+                        let videoUrl = ""
+                        if (c.cdnList && c.cdnList.length > 0) {
+                            const cdn = c.cdnList.find(x => x.isDefault) || c.cdnList[0]
+                            if (cdn?.videoPathList?.length > 0) {
+                                const v = cdn.videoPathList.find(x => x.isDefault) || cdn.videoPathList[0]
+                                videoUrl = v.videoPath
+                            }
+                        }
+
+                        return {
+                            ...c,
+                            title: c.chapterName || `Episode ${c.chapterIndex}`,
+                            episodeNo: c.chapterName ? c.chapterName.replace(/^EP\s*/i, '') : String(c.chapterIndex + 1),
+                            playVoucher: videoUrl,
+                            isLock: false
+                        }
+                    })
+                    setEpisodes(mapped)
+                    // If current is not set, set to Episode 1 (or first available)
+                    if (!current) {
+                        const firstEp = mapped.find(e => {
+                            const no = parseInt(e.episodeNo)
+                            return no === 1
+                        }) || mapped[0]
+                        setCurrent(firstEp)
+                    }
+                } else {
+                    if (!detail) setError("Gagal memuat detail drama.") // Only error if both failed
+                    else setError("Episode tidak ditemukan.")
+                }
             } else {
                 if (source !== 'netshort') {
                     setError("Maaf, pemutaran video untuk sumber ini belum didukung sepenuhnya.")
@@ -46,7 +106,29 @@ export default function Player() {
             setLoading(false)
         }
         load()
+        load()
     }, [id, source])
+
+    // Fetch Fresh Stream on Episode Change
+    useEffect(() => {
+        const loadStream = async () => {
+            if (source === 'dramabos' && current) {
+                setCurrentStreamUrl(null) // Reset first
+                const indexToFetch = current.chapterIndex !== undefined && current.chapterIndex !== null ? current.chapterIndex : 1
+                const streamUrl = await getDramaBosStream(id, indexToFetch)
+                if (streamUrl) {
+                    setCurrentStreamUrl(streamUrl)
+                } else {
+                    // Fallback
+                    setCurrentStreamUrl(current.playVoucher)
+                }
+            } else if (current) {
+                // Non-dramabos sources
+                setCurrentStreamUrl(current.playVoucher || current.url)
+            }
+        }
+        loadStream()
+    }, [current, source, id])
 
     return (
         <div className="player-page" style={{
@@ -108,7 +190,17 @@ export default function Player() {
                                 <p style={{ opacity: 0.8 }}>{error}</p>
                             </div>
                         ) : (
-                            <VideoPlayer src={current?.playVoucher} />
+                            <VideoPlayer
+                                src={currentStreamUrl}
+                                onEnded={() => {
+                                    if (episodes && current) {
+                                        const idx = episodes.findIndex(e => e === current)
+                                        if (idx >= 0 && idx < episodes.length - 1) {
+                                            setCurrent(episodes[idx + 1])
+                                        }
+                                    }
+                                }}
+                            />
                         )}
                     </div>
                     {/* Synopsis below video */}
