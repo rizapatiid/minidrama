@@ -93,6 +93,10 @@ export default function Player() {
                             return no === 1
                         }) || mapped[0]
                         setCurrent(firstEp)
+                        // Optimize: Set stream URL immediately for first load to avoid flicker/delay
+                        if (firstEp) {
+                            setCurrentStreamUrl(firstEp.playVoucher || firstEp.url)
+                        }
                     }
                 } else {
                     if (!detail) setError("Gagal memuat detail drama.") // Only error if both failed
@@ -115,7 +119,17 @@ export default function Player() {
             if (source === 'dramabos' && current) {
                 setCurrentStreamUrl(null) // Reset first
                 const indexToFetch = current.chapterIndex !== undefined && current.chapterIndex !== null ? current.chapterIndex : 1
-                const streamUrl = await getDramaBosStream(id, indexToFetch)
+                // Avoid fetching stream for index 0 if it causes 404s/delays. 
+                // Episode 1 (index 0) usually has a valid playVoucher from the detail API.
+                let streamUrl = null
+                console.log("Stream Fetch Start:", { indexToFetch, hasPlayVoucher: !!current.playVoucher, voucher: current.playVoucher })
+
+                if (indexToFetch > 0) {
+                    streamUrl = await getDramaBosStream(id, indexToFetch)
+                } else {
+                    console.log("Skipping stream fetch for Index 0")
+                }
+
                 if (streamUrl) {
                     setCurrentStreamUrl(streamUrl)
                 } else {
