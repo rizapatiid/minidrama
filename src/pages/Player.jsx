@@ -1,288 +1,376 @@
-import { useParams } from "react-router-dom"
-import { useEffect, useState } from "react"
-import { getNetShortEpisodes, getItemById } from "../api/sansekai"
-import { getDramaBosDetail, getDramaBosChapters, getDramaBosStream } from "../api/dramabos"
-import VideoPlayer from "../components/VideoPlayer"
-import EpisodeList from "../components/EpisodeList"
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, List, Info, AlertCircle, ChevronDown, MonitorPlay, Lock } from 'lucide-react'
+import { getDramaBosDetail, getDramaBosChapters, getDramaBosStream } from '../api/dramabos'
+import Hls from 'hls.js'
 
-export default function Player() {
-    const { source, id } = useParams()
-    const [episodes, setEpisodes] = useState([])
-    const [current, setCurrent] = useState(null)
-    const [currentStreamUrl, setCurrentStreamUrl] = useState(null)
-    const [meta, setMeta] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+// --- INTERNAL STYLES (NO EXTERNAL DEPENDENCY) ---
+const INTERNAL_STYLES = `
+  .sp-container { background-color: #050505; color: #e5e5e5; font-family: sans-serif; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .sp-header { position: fixed; top: 0; left: 0; right: 0; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.08); z-index: 100; transition: all 0.3s ease; }
+  .sp-btn-icon { padding: 8px; border-radius: 50%; color: #a3a3a3; transition: all 0.2s; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .sp-btn-icon:hover { background: rgba(255,255,255,0.1); color: #fff; transform: scale(1.05); }
+  
+  .sp-title-area { display: flex; flex-direction: column; flex: 1; min-width: 0; margin-left: 12px; }
+  .sp-title { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+  .sp-subtitle { font-size: 10px; font-weight: 600; color: #10b981; letter-spacing: 0.05em; background: rgba(16,185,129,0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px; align-self: flex-start; }
+
+  .sp-main { padding-top: 60px; display: flex; flex-direction: column; height: 100dvh; }
+  @media (min-width: 1024px) { .sp-main { flex-direction: row; overflow: hidden; } }
+
+  .sp-video-section { flex: 1; position: relative; background: #000; display: flex; flex-direction: column; }
+  .sp-video-container { width: 100%; aspect-ratio: 16/9; position: relative; z-index: 50; background: #000; }
+  @media (min-width: 1024px) { .sp-video-container { height: 100%; aspect-ratio: auto; display: flex; align-items: center; justify-content: center; position: absolute; inset: 0; } }
+
+  .sp-loading-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(24,24,27,0.5); backdrop-filter: blur(4px); gap: 12px; color: #737373; }
+  .sp-spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #10b981; border-radius: 50%; animation: sp-spin 1s linear infinite; }
+  @keyframes sp-spin { to { transform: rotate(360deg); } }
+
+  .sp-info-mobile { padding: 16px; background: #0a0a0a; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .sp-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); color: #d4d4d4; border: 1px solid rgba(255,255,255,0.05); margin-right: 6px; }
+  .sp-tag-accent { background: #10b981; color: #000; font-weight: 700; border: none; box-shadow: 0 0 10px rgba(16,185,129,0.2); }
+  
+  .sp-synopsis { font-size: 13px; color: #a3a3a3; line-height: 1.6; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; }
+
+  .sp-info-desktop { display: none; position: absolute; bottom: 0; left: 0; right: 0; padding: 40px; background: linear-gradient(to top, #000 10%, rgba(0,0,0,0.9) 50%, transparent); z-index: 60; transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @media (min-width: 1024px) { .sp-info-desktop { display: block; } }
+  .sp-info-desktop.hidden { transform: translateY(85%); }
+  
+  .sp-cover { width: 100px; height: 150px; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
+  .sp-info-content { margin-left: 24px; color: #fff; }
+  .sp-big-title { font-size: 32px; font-weight: 800; margin-bottom: 8px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+
+  .sp-sidebar { background: #0f0f0f; display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.05); }
+  @media (min-width: 1024px) { .sp-sidebar { width: 380px; height: 100%; } }
+  
+  .sp-list-header { padding: 16px; background: rgba(15,15,15,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .sp-list-title { font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 0.05em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .sp-count-badge { font-size: 10px; font-family: monospace; color: #10b981; background: rgba(16,185,129,0.1); padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.2); }
+
+  .sp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 16px; overflow-y: auto; flex: 1; }
+  @media (max-width: 768px) { .sp-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .sp-ep-btn { aspect-ratio: 1/1; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.03); color: #737373; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; position: relative; display: flex; align-items: center; justify-content: center; }
+  .sp-ep-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.1); }
+  .sp-ep-btn.active { background: #fff; color: #000; font-weight: 800; border-color: #fff; transform: scale(1.05); z-index: 5; box-shadow: 0 0 15px rgba(255,255,255,0.2); }
+  .sp-ep-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+  
+  .sp-active-dot { position: absolute; top: -2px; right: -2px; display: flex; }
+  .sp-ping { width: 8px; height: 8px; background: #10b981; border-radius: 50%; opacity: 0.75; animation: sp-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite; position: absolute; }
+  .sp-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; position: relative; }
+  @keyframes sp-ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+  /* SCROLLBAR */
+  .custom-scroll::-webkit-scrollbar { width: 5px; }
+  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+  .custom-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+  .custom-scroll::-webkit-scrollbar-thumb:hover { background: #555; }
+`
+
+// --- INTERNAL COMPONENTS (NO EXTERNAL DEPENDENCY) ---
+
+function InternalVideoPlayer({ src, poster, onEnded }) {
+    const videoRef = useRef(null)
+    const hlsRef = useRef(null)
 
     useEffect(() => {
-        const load = async () => {
-            setLoading(true)
-            setError(null)
+        const video = videoRef.current
+        if (!video || !src) return
 
-            // 1. Try to get metadata from cache
-            const item = await getItemById(source, id)
-            if (item) setMeta(item)
-
-            // 2. Load Content based on source
-            if (source === 'netshort') {
-                const eps = await getNetShortEpisodes(id)
-                if (eps && eps.length > 0) {
-                    // Force unlock all episodes
-                    const unlockedEps = eps.map(e => ({ ...e, isLock: false }))
-                    setEpisodes(unlockedEps)
-
-                    // Find first episode to play (defaults to first available)
-                    const first = unlockedEps.find(e => !e.isLock) || unlockedEps[0]
-                    setCurrent(first)
-                } else {
-                    setError("Konten ini belum memiliki episode yang tersedia.")
-                }
-            } else if (source === 'dramabox' && item?.videoPath) {
-                // Legacy Dramabox support
-                setCurrent({ playVoucher: item.videoPath, title: item.title })
-            } else if (source === 'dramabos') {
-                // 1. Fetch Full Detail
-                const detail = await getDramaBosDetail(id)
-                let fullChapterList = []
-
-                if (detail) {
-                    setMeta({
-                        ...detail,
-                        title: detail.bookName,
-                        cover: detail.cover
-                    })
-                    if (detail.chapterList) fullChapterList = detail.chapterList
-                }
-
-                // 2. Try Fetch All Chapters (to ensure we get 1 to End)
-                // Some APIs limit detail's chapter list.
-                const allChapters = await getDramaBosChapters(id)
-                if (allChapters && allChapters.length > fullChapterList.length) {
-                    fullChapterList = allChapters
-                }
-
-                // 3. Map Chapters
-                if (fullChapterList.length > 0) {
-                    // Sort by chapterIndex to be safe
-                    fullChapterList.sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
-
-                    const mapped = fullChapterList.map(c => {
-                        // Helper to extract best quality
-                        let videoUrl = ""
-                        if (c.cdnList && c.cdnList.length > 0) {
-                            const cdn = c.cdnList.find(x => x.isDefault) || c.cdnList[0]
-                            if (cdn?.videoPathList?.length > 0) {
-                                const v = cdn.videoPathList.find(x => x.isDefault) || cdn.videoPathList[0]
-                                videoUrl = v.videoPath
-                            }
-                        }
-
-                        return {
-                            ...c,
-                            title: c.chapterName || `Episode ${c.chapterIndex}`,
-                            episodeNo: c.chapterName ? c.chapterName.replace(/^EP\s*/i, '') : String(c.chapterIndex + 1),
-                            playVoucher: videoUrl,
-                            isLock: false
-                        }
-                    })
-                    setEpisodes(mapped)
-                    // If current is not set, set to Episode 1 (or first available)
-                    if (!current) {
-                        const firstEp = mapped.find(e => {
-                            const no = parseInt(e.episodeNo)
-                            return no === 1
-                        }) || mapped[0]
-                        setCurrent(firstEp)
-                        // Optimize: Set stream URL immediately for first load to avoid flicker/delay
-                        if (firstEp) {
-                            setCurrentStreamUrl(firstEp.playVoucher || firstEp.url)
-                        }
-                    }
-                } else {
-                    if (!detail) setError("Gagal memuat detail drama.") // Only error if both failed
-                    else setError("Episode tidak ditemukan.")
-                }
-            } else {
-                if (source !== 'netshort') {
-                    setError("Maaf, pemutaran video untuk sumber ini belum didukung sepenuhnya.")
-                }
-            }
-            setLoading(false)
+        if (hlsRef.current) {
+            hlsRef.current.destroy()
+            hlsRef.current = null
         }
-        load()
-        load()
-    }, [id, source])
 
-    // Fetch Fresh Stream on Episode Change
-    useEffect(() => {
-        const loadStream = async () => {
-            if (source === 'dramabos' && current) {
-                setCurrentStreamUrl(null) // Reset first
-                const indexToFetch = current.chapterIndex !== undefined && current.chapterIndex !== null ? current.chapterIndex : 1
-                // Avoid fetching stream for index 0 if it causes 404s/delays. 
-                // Episode 1 (index 0) usually has a valid playVoucher from the detail API.
-                let streamUrl = null
-                console.log("Stream Fetch Start:", { indexToFetch, hasPlayVoucher: !!current.playVoucher, voucher: current.playVoucher })
-
-                if (indexToFetch > 0) {
-                    streamUrl = await getDramaBosStream(id, indexToFetch)
-                } else {
-                    console.log("Skipping stream fetch for Index 0")
+        if (Hls.isSupported() && (src.includes('.m3u8') || src.includes('.m3u'))) {
+            const hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true })
+            hlsRef.current = hls
+            hls.loadSource(src)
+            hls.attachMedia(video)
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(console.warn)
+            })
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                if (data.fatal) {
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad()
+                    else hls.destroy()
                 }
-
-                if (streamUrl) {
-                    setCurrentStreamUrl(streamUrl)
-                } else {
-                    // Fallback
-                    setCurrentStreamUrl(current.playVoucher)
-                }
-            } else if (current) {
-                // Non-dramabos sources
-                setCurrentStreamUrl(current.playVoucher || current.url)
-            }
+            })
+        } else {
+            video.src = src
+            video.referrerPolicy = "no-referrer"
+            video.load()
+            video.play().catch(console.warn)
         }
-        loadStream()
-    }, [current, source, id])
+
+        return () => hlsRef.current?.destroy()
+    }, [src])
 
     return (
-        <div className="player-page" style={{
-            padding: '20px',
-            maxWidth: '1400px',
-            margin: '0 auto',
-            minHeight: '100vh'
-        }}>
-            {/* Metadata Header (Compact) */}
-            {meta && (
-                <div style={{ marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'center' }}>
-                    <button onClick={() => window.history.back()} style={{
-                        background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center'
-                    }}>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+        <video
+            ref={videoRef}
+            controls
+            playsInline
+            onEnded={onEnded}
+            poster={poster}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+        />
+    )
+}
+
+function InternalEpisodeList({ episodes, currentEpisode, onEpisodeSelect }) {
+    const activeRef = useRef(null)
+    useEffect(() => {
+        activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, [currentEpisode])
+
+    if (!episodes?.length) return <div style={{ padding: '20px', textAlign: 'center', color: '#555', fontSize: '12px' }}>TIDAK ADA EPISODE</div>
+
+    return (
+        <div className="sp-grid custom-scroll">
+            {episodes.map((item, idx) => {
+                const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
+                const isLocked = item.isLock
+                return (
+                    <button
+                        key={idx}
+                        ref={isActive ? activeRef : null}
+                        disabled={isLocked}
+                        onClick={() => onEpisodeSelect(item)}
+                        className={`sp-ep-btn ${isActive ? 'active' : ''}`}
+                    >
+                        {isActive && (
+                            <div className="sp-active-dot">
+                                <span className="sp-ping"></span>
+                                <span className="sp-dot"></span>
+                            </div>
+                        )}
+                        {isLocked && <Lock size={12} color="rgba(255,255,255,0.5)" style={{ position: 'absolute', top: 4, right: 4 }} />}
+                        {item.episodeNo}
                     </button>
-                    <img
-                        src={meta.cover || meta.shortPlayCover || meta.coverWap}
-                        style={{ width: '60px', height: '90px', borderRadius: '4px', objectFit: 'cover' }}
-                        alt="Cover"
-                    />
-                    <div>
-                        <h2 style={{ margin: '0 0 4px 0', fontSize: '1.5rem' }}>{meta.title || meta.shortPlayName || meta.bookName}</h2>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <span className="badge" style={{ fontSize: '0.8rem' }}>{source.toUpperCase()}</span>
-                            {meta.categoryName && <span className="badge" style={{ background: '#333' }}>{meta.categoryName}</span>}
+                )
+            })}
+        </div>
+    )
+}
+
+// --- MAIN PAGE ---
+
+export default function Player() {
+    const { source, id: bookId } = useParams()
+    const navigate = useNavigate()
+
+    // State
+    const [loading, setLoading] = useState(true)
+    const [detail, setDetail] = useState(null)
+    const [episodes, setEpisodes] = useState([])
+    const [currentEp, setCurrentEp] = useState(null)
+    const [streamUrl, setStreamUrl] = useState(null)
+    const [videoLoading, setVideoLoading] = useState(false)
+    const [error, setError] = useState(null)
+    const [showSynopsis, setShowSynopsis] = useState(true)
+
+    // Init
+    useEffect(() => {
+        const init = async () => {
+            setLoading(true)
+            try {
+                if (source !== 'dramabos') throw new Error("Sumber tidak didukung")
+
+                const [d, c] = await Promise.all([
+                    getDramaBosDetail(bookId),
+                    getDramaBosChapters(bookId)
+                ])
+
+                if (!d) throw new Error("Gagal mengambil detail")
+                setDetail(d)
+
+                // Process Episodes
+                let processedEps = []
+                if (c && Array.isArray(c)) {
+                    processedEps = c.map((item, idx) => ({
+                        ...item,
+                        internalIndex: idx,
+                        title: item.chapterName || `Episode ${idx + 1}`,
+                        episodeNo: String(idx + 1),
+                        bestUrl: findBestQualityInCdnList(item.cdnList)
+                    })).sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
+                }
+                setEpisodes(processedEps)
+
+                // Start
+                if (processedEps.length > 0) playEpisode(processedEps[0])
+            } catch (err) {
+                setError(err.message)
+            } finally {
+                setLoading(false)
+            }
+        }
+        init()
+    }, [bookId, source])
+
+    // Helpers
+    const findBestQualityInCdnList = (cdnList) => {
+        if (!cdnList?.length) return null
+        for (const cdn of cdnList) {
+            if (cdn.videoPathList) {
+                const q1080 = cdn.videoPathList.find(v => v.quality === 1080)
+                if (q1080) return q1080.videoPath
+                const q720 = cdn.videoPathList.find(v => v.quality === 720)
+                if (q720) return q720.videoPath
+                const qDef = cdn.videoPathList.find(v => v.isDefault) || cdn.videoPathList[0]
+                if (qDef) return qDef.videoPath
+            }
+        }
+        return null
+    }
+
+    const playEpisode = async (episode) => {
+        if (!episode) return
+        setCurrentEp(episode)
+        setVideoLoading(true)
+        setStreamUrl(null)
+
+        try {
+            // Priority 1: CDN
+            if (episode.bestUrl) {
+                setStreamUrl(episode.bestUrl)
+                setVideoLoading(false)
+                return
+            }
+            // Priority 2: API
+            const targetIndex = (episode.chapterIndex !== undefined && episode.chapterIndex !== null)
+                ? episode.chapterIndex
+                : (episode.internalIndex + 1)
+
+            const url = await getDramaBosStream(bookId, targetIndex)
+            if (url) {
+                setStreamUrl(url)
+            } else if (episode.internalIndex === 0 && detail?.videoPath) {
+                setStreamUrl(detail.videoPath)
+            }
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setVideoLoading(false)
+        }
+    }
+
+    const handleNext = () => {
+        if (!episodes || !currentEp) return
+        const currentIdx = episodes.findIndex(e => e.chapterIndex === currentEp.chapterIndex)
+        if (currentIdx >= 0 && currentIdx < episodes.length - 1) {
+            playEpisode(episodes[currentIdx + 1])
+        }
+    }
+
+    if (loading && !detail) return <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>MEMUAT...</div>
+    if (error) return <div style={{ background: '#000', color: 'red', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>{error} <button onClick={() => navigate('/')} style={{ marginTop: 20, padding: '10px 20px', borderRadius: 20, background: '#333', color: '#fff', border: 'none' }}>KEMBALI</button></div>
+
+    return (
+        <>
+            <style>{INTERNAL_STYLES}</style>
+
+            <div className="sp-container">
+                {/* HEADER */}
+                <header className="sp-header">
+                    <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                        <button onClick={() => navigate(-1)} className="sp-btn-icon">
+                            <ArrowLeft size={20} />
+                        </button>
+                        <div className="sp-title-area">
+                            <h1 className="sp-title">{detail?.bookName}</h1>
+                            <span className="sp-subtitle">
+                                {currentEp ? `EPISODE ${currentEp.episodeNo}` : 'MEMUAT'}
+                            </span>
                         </div>
                     </div>
-                </div>
-            )}
+                </header>
 
-            {/* Main Layout Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 3fr) minmax(280px, 1fr)',
-                gap: '24px',
-                alignItems: 'start'
-            }}>
-                {/* Left: Video Player */}
-                <div className="video-section">
-                    <div className="video-container" style={{
-                        background: '#000',
-                        borderRadius: '12px',
-                        overflow: 'hidden',
-                        minHeight: '400px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: 'var(--shadow)'
-                    }}>
-                        {loading ? (
-                            <div className="loading-spinner"></div>
-                        ) : error ? (
-                            <div style={{ color: '#ef4444', textAlign: 'center', padding: '40px' }}>
-                                <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                {/* MAIN */}
+                <div className="sp-main">
+                    {/* VIDEO AREA */}
+                    <div className="sp-video-section">
+                        <div className="sp-video-container">
+                            {streamUrl ? (
+                                <InternalVideoPlayer
+                                    key={streamUrl}
+                                    src={streamUrl}
+                                    poster={detail?.cover}
+                                    onEnded={handleNext}
+                                />
+                            ) : (
+                                <div className="sp-loading-overlay">
+                                    {videoLoading ? (
+                                        <>
+                                            <div className="sp-spinner"></div>
+                                            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em' }}>MEMUAT VIDEO</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <MonitorPlay size={32} opacity={0.3} />
+                                            <span>VIDEO TIDAK TERSEDIA</span>
+                                        </>
+                                    )}
                                 </div>
-                                <h3>Tidak dapat memutar video</h3>
-                                <p style={{ opacity: 0.8 }}>{error}</p>
-                            </div>
-                        ) : (
-                            <VideoPlayer
-                                src={currentStreamUrl}
-                                onEnded={() => {
-                                    if (episodes && current) {
-                                        const idx = episodes.findIndex(e => e === current)
-                                        if (idx >= 0 && idx < episodes.length - 1) {
-                                            setCurrent(episodes[idx + 1])
-                                        }
-                                    }
-                                }}
-                            />
-                        )}
-                    </div>
-                    {/* Synopsis below video */}
-                    <div style={{ marginTop: '20px', padding: '20px', background: 'var(--bg-card)', borderRadius: '12px' }}>
-                        <h3 style={{ marginTop: 0 }}>Sinopsis</h3>
-                        <p style={{ lineHeight: '1.6', opacity: 0.8 }}>
-                            {meta?.introduction || meta?.abstract || "Tidak ada deskripsi tersedia."}
-                        </p>
-                        {/* Tags */}
-                        {meta?.tags && (
-                            <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {Array.isArray(meta.tags) ? meta.tags.map((t, i) => (
-                                    <span key={i} style={{
-                                        background: 'rgba(255,255,255,0.1)',
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        fontSize: '0.8rem'
-                                    }}>#{t}</span>
-                                )) : null}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                            )}
+                        </div>
 
-                {/* Right: Episode List */}
-                <div className="sidebar" style={{ height: 'calc(100vh - 100px)', position: 'sticky', top: '20px' }}>
-                    {loading ? (
-                        <div style={{
-                            background: 'var(--bg-card)',
-                            padding: '20px',
-                            borderRadius: '12px',
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '15px'
-                        }}>
-                            <div style={{ width: '40%', height: '24px', background: 'var(--border)', borderRadius: '4px', opacity: 0.5 }}></div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                                {[...Array(20)].map((_, i) => (
-                                    <div key={i} style={{ aspectRatio: '1', background: 'var(--border)', borderRadius: '8px', opacity: 0.3 }}></div>
-                                ))}
+                        {/* DESKTOP INFO */}
+                        <div className={`sp-info-desktop ${!showSynopsis ? 'hidden' : ''}`}>
+                            <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'flex', alignItems: 'flex-end', gap: '24px' }}>
+                                <img src={detail?.cover} className="sp-cover" alt="" />
+                                <div className="sp-info-content">
+                                    <h2 className="sp-big-title">{detail?.bookName}</h2>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span className="sp-tag sp-tag-accent">EP {currentEp?.episodeNo}</span>
+                                        {detail?.tags?.map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
+                                    </div>
+                                    <p className="sp-synopsis" style={{ maxWidth: '600px', borderTop: 'none' }}>{detail?.introduction}</p>
+                                </div>
+                                <button className="sp-btn-icon" onClick={() => setShowSynopsis(!showSynopsis)} style={{ marginBottom: '4px' }}>
+                                    <ChevronDown size={28} />
+                                </button>
                             </div>
                         </div>
-                    ) : (
-                        <EpisodeList
+
+                        {/* MOBILE INFO */}
+                        <div className="sp-info-mobile lg:hidden">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div>
+                                    <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>{detail?.bookName}</h2>
+                                    <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                        <span className="sp-tag sp-tag-accent">Drama</span>
+                                        {detail?.tags?.slice(0, 3).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowSynopsis(!showSynopsis)} className="sp-btn-icon">
+                                    {showSynopsis ? <ChevronDown size={18} /> : <Info size={18} />}
+                                </button>
+                            </div>
+                            <div style={{ maxHeight: showSynopsis ? '200px' : '0px', overflow: 'hidden', transition: 'all 0.3s' }}>
+                                <p className="sp-synopsis">{detail?.introduction || 'Sinopsis tidak tersedia'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SIDEBAR */}
+                    <div className="sp-sidebar">
+                        <div className="sp-list-header">
+                            <div className="sp-list-title">
+                                <List size={16} color="#10b981" />
+                                DAFTAR EPISODE
+                            </div>
+                            <span className="sp-count-badge">{episodes.length} VIDEO</span>
+                        </div>
+                        <InternalEpisodeList
                             episodes={episodes}
-                            current={current}
-                            onPlay={setCurrent}
+                            currentEpisode={currentEp}
+                            onEpisodeSelect={(ep) => playEpisode(ep)}
                         />
-                    )}
+                    </div>
                 </div>
             </div>
-
-            {/* Mobile Responsive Style Injection */}
-            <style>{`
-                @media (max-width: 900px) {
-                    .player-page > div[style*="grid-template-columns"] {
-                        grid-template-columns: 1fr !important;
-                    }
-                    .sidebar {
-                        height: auto !important;
-                        position: static !important;
-                    }
-                    .episode-grid {
-                        max-height: 400px;
-                    }
-                }
-            `}</style>
-        </div>
+        </>
     )
 }

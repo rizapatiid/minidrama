@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react'
-import "../index.css"
+import { Play, Lock } from 'lucide-react'
 
-export default function EpisodeList({ episodes, current, onPlay }) {
-    const scrollRef = useRef(null)
+export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect }) {
     const activeRef = useRef(null)
 
     // Scroll to active episode on mount or change
@@ -10,97 +9,59 @@ export default function EpisodeList({ episodes, current, onPlay }) {
         if (activeRef.current) {
             activeRef.current.scrollIntoView({
                 behavior: 'smooth',
-                block: 'nearest',
+                block: 'center',
             })
         }
-    }, [current])
+    }, [currentEpisode])
 
-    if (!episodes || episodes.length === 0) return null
+    if (!episodes || episodes.length === 0) return (
+        <div className="p-8 text-center text-neutral-500 text-xs uppercase tracking-widest">
+            Tidak ada episode
+        </div>
+    )
 
     return (
-        <div className="episode-list-container" style={{
-            background: 'var(--bg-card)',
-            padding: '20px',
-            borderRadius: '12px',
-            height: '100%',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: 'var(--shadow)'
-        }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>Episodes</span>
-                <span style={{ fontSize: '0.9rem', opacity: 0.7, background: 'var(--bg-main)', padding: '2px 8px', borderRadius: '12px' }}>{episodes.length}</span>
-            </h3>
+        <div className="grid grid-cols-4 md:grid-cols-5 gap-2 p-2">
+            {episodes.map((item, idx) => {
+                // Determine Active State
+                const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
+                const isLocked = item.isLock
 
-            <div className="episode-grid custom-scrollbar" style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
-                gap: '10px',
-                overflowY: 'auto',
-                paddingRight: '5px',
-                flex: 1
-            }}>
-                {episodes.map((e, i) => {
-                    // Check logic for both NetShort (episodeNo) and other sources if applicable
-                    const isActive = current && (
-                        (e.episodeNo && current.episodeNo === e.episodeNo) ||
-                        (e.shortPlayId && current.shortPlayId === e.shortPlayId)
-                    )
-                    const isLocked = e.isLock
+                return (
+                    <button
+                        key={idx}
+                        ref={isActive ? activeRef : null}
+                        disabled={isLocked}
+                        onClick={() => onEpisodeSelect(item)}
+                        className={`
+                            relative aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300
+                            ${isActive
+                                ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)] scale-105 z-10 font-bold border-2 border-transparent'
+                                : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white border border-white/5'
+                            }
+                            ${isLocked ? 'opacity-40 cursor-not-allowed grayscale' : 'cursor-pointer'}
+                        `}
+                    >
+                        {/* Playing Indicator */}
+                        {isActive && (
+                            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            </span>
+                        )}
 
-                    return (
-                        <button
-                            key={i}
-                            ref={isActive ? activeRef : null}
-                            disabled={isLocked}
-                            onClick={() => onPlay(e)}
-                            style={{
-                                appearance: 'none',
-                                border: isActive ? '2px solid var(--primary)' : '1px solid var(--border)',
-                                background: isActive ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-main)',
-                                color: isActive ? 'var(--primary)' : 'var(--text-main)',
-                                borderRadius: '8px',
-                                padding: '12px 4px',
-                                cursor: isLocked ? 'not-allowed' : 'pointer',
-                                fontSize: '0.9rem',
-                                opacity: isLocked ? 0.5 : 1,
-                                position: 'relative',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: isActive ? 'bold' : 'normal',
-                                transition: 'all 0.2s ease',
-                                boxShadow: isActive ? '0 0 10px rgba(37, 99, 235, 0.2)' : 'none'
-                            }}
-                            onMouseEnter={(e) => !isLocked && (e.currentTarget.style.borderColor = 'var(--text-muted)')}
-                            onMouseLeave={(e) => !isLocked && !isActive && (e.currentTarget.style.borderColor = 'var(--border)')}
-                        >
-                            {e.episodeNo}
-                            {isLocked && (
-                                <span style={{ position: 'absolute', top: '4px', right: '4px', display: 'flex' }}>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                                </span>
-                            )}
-                        </button>
-                    )
-                })}
-            </div>
-            <style>{`
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: var(--border);
-                    borderRadius: 3px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: var(--text-muted);
-                }
-            `}</style>
+                        {/* Lock Icon */}
+                        {isLocked && (
+                            <Lock size={12} className="absolute top-1 right-1 text-white/50" />
+                        )}
+
+                        {/* Episode Number */}
+                        <span className={isActive ? 'scale-110' : ''}>
+                            {item.episodeNo}
+                        </span>
+                    </button>
+                )
+            })}
         </div>
     )
 }

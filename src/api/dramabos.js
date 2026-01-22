@@ -104,13 +104,35 @@ export const getDramaBosChapters = async (bookId) => {
 
 export const getDramaBosStream = async (bookId, index) => {
     try {
-        // The API expects 1-based index typically, or whatever the chapterIndex is in the list
-        const res = await fetchWithRetry(`${BASE_URL}/watch/player?bookId=${bookId}&index=${index}&lang=in`)
+        const url = `${BASE_URL}/watch/player?bookId=${bookId}&index=${index}&lang=in`
+        console.log("[Dramabos API] Fetching Stream:", url, { bookId, index })
+
+        const res = await fetchWithRetry(url)
         if (res.ok) {
             const json = await res.json()
             if (json.success && json.data) {
-                return json.data.videoUrl
+                // Priority 1: Direct videoUrl
+                if (json.data.videoUrl) return json.data.videoUrl
+
+                // Priority 2: Extract from qualities
+                if (json.data.qualities && Array.isArray(json.data.qualities)) {
+                    const qs = json.data.qualities
+
+                    // 1. Try 1080p
+                    const q1080 = qs.find(q => q.quality === 1080)
+                    if (q1080 && q1080.videoPath) return q1080.videoPath
+
+                    // 2. Try 720p
+                    const q720 = qs.find(q => q.quality === 720)
+                    if (q720 && q720.videoPath) return q720.videoPath
+
+                    // 3. Fallback to Default or First
+                    const qDefault = qs.find(q => q.isDefault) || qs[0]
+                    if (qDefault && qDefault.videoPath) return qDefault.videoPath
+                }
             }
+        } else {
+            console.error("[Dramabos API] Fetch failed:", res.status, res.statusText)
         }
         return null
     } catch (e) {
