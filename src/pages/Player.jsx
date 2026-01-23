@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, List, Info, ChevronDown, ChevronUp, MonitorPlay, Lock, X, Play, Pause, Volume2, VolumeX, Maximize, Settings } from 'lucide-react'
-import { getDramaBosDetail, getDramaBosChapters, getDramaBosStream } from '../api/dramabos'
+import { getDramaBosDetail, getDramaBosChapters, getDramaBosStream, getDramaBosForYou, getDramaBosNew, getDramaBosRank } from '../api/dramabos'
 import Hls from 'hls.js'
 
 // --- INTERNAL STYLES ---
@@ -453,6 +453,7 @@ const INTERNAL_STYLES = `
     max-height: 120px;
     overflow-y: auto;
     padding-right: 8px;
+    text-align: justify;
   }
   
   .sp-synopsis::-webkit-scrollbar { width: 4px; }
@@ -497,155 +498,202 @@ const INTERNAL_STYLES = `
   /* DESKTOP SIDEBAR */
   .sp-sidebar { 
     display: none;
-    background: #0a0a0a;
-    border-left: 1px solid rgba(255,255,255,0.05);
+    background: linear-gradient(180deg, #0f0f0f 0%, #0a0a0a 100%);
+    border-left: 1px solid rgba(59,130,246,0.1);
     flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.5);
   }
   
   @media (min-width: 1024px) { 
     .sp-sidebar { 
       display: flex;
-      width: 400px;
+      width: 420px;
       height: 100%;
     }
   }
   
   /* DESKTOP INFO IN SIDEBAR */
   .sp-sidebar-info {
-    padding: 20px;
-    background: rgba(15,15,15,0.95);
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(37,99,235,0.05) 100%);
+    border-bottom: 1px solid rgba(59,130,246,0.1);
     display: flex;
-    gap: 16px;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .sp-sidebar-info::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);
+    pointer-events: none;
   }
   
   .sp-sidebar-cover {
-    width: 80px;
-    height: 120px;
-    border-radius: 8px;
+    width: 100px;
+    height: 150px;
+    border-radius: 12px;
     object-fit: cover;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.2);
+    border: 2px solid rgba(59,130,246,0.15);
+    position: relative;
+    z-index: 1;
   }
   
   .sp-sidebar-info-content {
     flex: 1;
     min-width: 0;
+    position: relative;
+    z-index: 1;
   }
   
   .sp-sidebar-title {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 18px;
+    font-weight: 800;
     color: #fff;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     line-height: 1.3;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
   
   .sp-sidebar-synopsis {
-    font-size: 12px;
-    color: rgba(255,255,255,0.6);
-    line-height: 1.5;
-    max-height: 80px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.6;
+    max-height: 100px;
     overflow-y: auto;
+    padding-right: 8px;
+    text-align: justify;
   }
   
   .sp-sidebar-synopsis::-webkit-scrollbar { width: 4px; }
-  .sp-sidebar-synopsis::-webkit-scrollbar-track { background: transparent; }
-  .sp-sidebar-synopsis::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.3); border-radius: 10px; }
+  .sp-sidebar-synopsis::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 2px; }
+  .sp-sidebar-synopsis::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.4); border-radius: 2px; }
+  .sp-sidebar-synopsis::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.6); }
   
   .sp-list-header { 
-    padding: 20px;
-    background: rgba(10,10,10,0.95);
+    padding: 20px 24px;
+    background: rgba(10,10,10,0.98);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(59,130,246,0.1);
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
   
   .sp-list-title { 
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 800;
     color: #fff;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
   
   .sp-count-badge { 
     font-size: 11px;
     font-family: monospace;
-    color: #3b82f6;
-    background: rgba(59,130,246,0.15);
-    padding: 4px 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(59,130,246,0.3);
-    font-weight: 600;
+    color: #60a5fa;
+    background: rgba(59,130,246,0.2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(59,130,246,0.4);
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(59,130,246,0.2);
   }
 
   .sp-grid { 
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 10px;
-    padding: 20px;
+    gap: 12px;
+    padding: 24px;
     overflow-y: auto;
     flex: 1;
+    background: #0a0a0a;
   }
+  
+  .sp-grid::-webkit-scrollbar { width: 8px; }
+  .sp-grid::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+  .sp-grid::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.3); border-radius: 4px; }
+  .sp-grid::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.5); }
   
   .sp-ep-btn { 
     aspect-ratio: 1/1;
-    border-radius: 10px;
+    border-radius: 12px;
     border: 1.5px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.04);
-    color: rgba(255,255,255,0.5);
-    font-size: 15px;
-    font-weight: 600;
+    background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+    color: rgba(255,255,255,0.6);
+    font-size: 16px;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  
+  .sp-ep-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(59,130,246,0.0) 0%, rgba(59,130,246,0.0) 100%);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  
+  .sp-ep-btn:hover:not(:disabled)::before {
+    opacity: 1;
   }
   
   .sp-ep-btn:hover:not(:disabled) { 
-    background: rgba(59,130,246,0.15);
+    background: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.1) 100%);
     color: #fff;
-    border-color: rgba(59,130,246,0.5);
+    border-color: rgba(59,130,246,0.4);
     transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(59,130,246,0.25);
   }
   
   .sp-ep-btn.active { 
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: #fff;
-    font-weight: 700;
+    font-weight: 800;
     border-color: transparent;
     transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+    box-shadow: 0 6px 20px rgba(59,130,246,0.5), 0 0 0 2px rgba(59,130,246,0.3);
   }
   
   .sp-ep-btn:disabled { 
-    opacity: 0.3;
+    opacity: 0.25;
     cursor: not-allowed;
+    filter: grayscale(1);
   }
   
   .sp-active-indicator {
     position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 8px;
-    height: 8px;
-    background: #10b981;
+    top: 6px;
+    right: 6px;
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(135deg, #10b981, #059669);
     border-radius: 50%;
     animation: sp-pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(16,185,129,0.6), 0 0 0 2px rgba(0,0,0,0.3);
   }
   
   @keyframes sp-pulse { 
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(1.2); }
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(16,185,129,0.6), 0 0 0 2px rgba(0,0,0,0.3); }
+    50% { opacity: 0.7; transform: scale(1.3); box-shadow: 0 0 16px rgba(16,185,129,0.8), 0 0 0 3px rgba(0,0,0,0.3); }
   }
 
   /* MOBILE POPUP */
@@ -885,616 +933,647 @@ const INTERNAL_STYLES = `
 
 // --- VIDEO PLAYER COMPONENT ---
 function InternalVideoPlayer({ src, poster, onEnded, onToggleInfo, showInfo, playbackRate = 1, onOpenSettings }) {
-    const videoRef = useRef(null)
-    const hlsRef = useRef(null)
-    const containerRef = useRef(null)
-    const [playing, setPlaying] = useState(false)
-    const [muted, setMuted] = useState(false)
-    const [currentTime, setCurrentTime] = useState(0)
-    const [duration, setDuration] = useState(0)
-    const [showControls, setShowControls] = useState(true)
-    const hideControlsTimeout = useRef(null)
+  const videoRef = useRef(null)
+  const hlsRef = useRef(null)
+  const containerRef = useRef(null)
+  const [playing, setPlaying] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [showControls, setShowControls] = useState(true)
+  const hideControlsTimeout = useRef(null)
 
-    useEffect(() => {
-        const video = videoRef.current
-        if (!video || !src) return
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !src) return
 
-        if (hlsRef.current) {
-            hlsRef.current.destroy()
-            hlsRef.current = null
+    if (hlsRef.current) {
+      hlsRef.current.destroy()
+      hlsRef.current = null
+    }
+
+    if (Hls.isSupported() && (src.includes('.m3u8') || src.includes('.m3u'))) {
+      const hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true })
+      hlsRef.current = hls
+      hls.loadSource(src)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Auto-play video when ready
+        const playPromise = video.play()
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.warn('Auto-play prevented:', err)
+            // If auto-play fails, show controls so user can manually play
+            setShowControls(true)
+          })
         }
-
-        if (Hls.isSupported() && (src.includes('.m3u8') || src.includes('.m3u'))) {
-            const hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true })
-            hlsRef.current = hls
-            hls.loadSource(src)
-            hls.attachMedia(video)
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                video.play().catch(console.warn)
-            })
-            hls.on(Hls.Events.ERROR, (_, data) => {
-                if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad()
-                    else hls.destroy()
-                }
-            })
-        } else {
-            video.src = src
-            video.referrerPolicy = "no-referrer"
-            video.load()
-            video.play().catch(console.warn)
+      })
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad()
+          else hls.destroy()
         }
-
-        return () => hlsRef.current?.destroy()
-    }, [src])
-
-    useEffect(() => {
-        const video = videoRef.current
-        if (!video) return
-
-        const updateTime = () => setCurrentTime(video.currentTime)
-        const updateDuration = () => setDuration(video.duration)
-        const handlePlay = () => setPlaying(true)
-        const handlePause = () => setPlaying(false)
-
-        video.addEventListener('timeupdate', updateTime)
-        video.addEventListener('loadedmetadata', updateDuration)
-        video.addEventListener('play', handlePlay)
-        video.addEventListener('pause', handlePause)
-        video.addEventListener('ended', onEnded)
-
-        return () => {
-            video.removeEventListener('timeupdate', updateTime)
-            video.removeEventListener('loadedmetadata', updateDuration)
-            video.removeEventListener('play', handlePlay)
-            video.removeEventListener('pause', handlePause)
-            video.removeEventListener('ended', onEnded)
-        }
-    }, [onEnded])
-
-    useEffect(() => {
-        const video = videoRef.current
-        if (video) {
-            video.playbackRate = playbackRate
-        }
-    }, [playbackRate])
-
-    const togglePlay = () => {
-        const video = videoRef.current
-        if (!video) return
-        if (video.paused) video.play()
-        else video.pause()
+      })
+    } else {
+      video.src = src
+      video.referrerPolicy = "no-referrer"
+      video.load()
+      // Auto-play for non-HLS videos
+      const playPromise = video.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.warn('Auto-play prevented:', err)
+          setShowControls(true)
+        })
+      }
     }
 
-    const toggleMute = () => {
-        const video = videoRef.current
-        if (!video) return
-        video.muted = !video.muted
-        setMuted(video.muted)
+    return () => hlsRef.current?.destroy()
+  }, [src])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const updateTime = () => setCurrentTime(video.currentTime)
+    const updateDuration = () => setDuration(video.duration)
+    const handlePlay = () => {
+      setPlaying(true)
+      // Auto hide controls after 5 seconds when playing starts
+      if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current)
+      hideControlsTimeout.current = setTimeout(() => {
+        setShowControls(false)
+      }, 5000)
+    }
+    const handlePause = () => {
+      setPlaying(false)
+      setShowControls(true)
+      if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current)
     }
 
-    const toggleFullscreen = () => {
-        if (containerRef.current) {
-            if (document.fullscreenElement) {
-                document.exitFullscreen()
-            } else {
-                containerRef.current.requestFullscreen()
-            }
-        }
+    video.addEventListener('timeupdate', updateTime)
+    video.addEventListener('loadedmetadata', updateDuration)
+    video.addEventListener('play', handlePlay)
+    video.addEventListener('pause', handlePause)
+    video.addEventListener('ended', onEnded)
+
+    return () => {
+      video.removeEventListener('timeupdate', updateTime)
+      video.removeEventListener('loadedmetadata', updateDuration)
+      video.removeEventListener('play', handlePlay)
+      video.removeEventListener('pause', handlePause)
+      video.removeEventListener('ended', onEnded)
     }
+  }, [onEnded])
 
-    const handleProgressClick = (e) => {
-        const video = videoRef.current
-        if (!video) return
-        const rect = e.currentTarget.getBoundingClientRect()
-        const pos = (e.clientX - rect.left) / rect.width
-        video.currentTime = pos * video.duration
+  useEffect(() => {
+    const video = videoRef.current
+    if (video) {
+      video.playbackRate = playbackRate
     }
+  }, [playbackRate])
 
-    const formatTime = (seconds) => {
-        if (!seconds || isNaN(seconds)) return '0:00'
-        const mins = Math.floor(seconds / 60)
-        const secs = Math.floor(seconds % 60)
-        return `${mins}:${secs.toString().padStart(2, '0')}`
+  const togglePlay = () => {
+    const video = videoRef.current
+    if (!video) return
+    if (video.paused) video.play()
+    else video.pause()
+  }
+
+  const toggleMute = () => {
+    const video = videoRef.current
+    if (!video) return
+    video.muted = !video.muted
+    setMuted(video.muted)
+  }
+
+  const toggleFullscreen = () => {
+    if (containerRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen()
+      } else {
+        containerRef.current.requestFullscreen()
+      }
     }
+  }
 
-    const handleInteraction = () => {
-        setShowControls(true)
-        if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current)
-        hideControlsTimeout.current = setTimeout(() => {
-            if (playing) setShowControls(false)
-        }, 3000)
-    }
+  const handleProgressClick = (e) => {
+    const video = videoRef.current
+    if (!video) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pos = (e.clientX - rect.left) / rect.width
+    video.currentTime = pos * video.duration
+  }
 
-    return (
-        <div
-            ref={containerRef}
-            className="sp-video-wrapper"
-            onMouseMove={handleInteraction}
-            onTouchStart={handleInteraction}
-            onClick={togglePlay}
-        >
-            <video
-                ref={videoRef}
-                className="sp-video"
-                playsInline
-                poster={poster}
-            />
-            <div className={`sp-controls-overlay ${showControls ? 'visible' : ''}`}>
-                <div className="sp-center-controls">
-                    <button className="sp-control-btn" onClick={(e) => { e.stopPropagation(); togglePlay(); }}>
-                        {playing ? <Pause size={28} /> : <Play size={28} style={{ marginLeft: '3px' }} />}
-                    </button>
-                </div>
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
 
-                <div className="sp-bottom-controls" onClick={(e) => e.stopPropagation()}>
-                    <div className="sp-progress-container" onClick={handleProgressClick}>
-                        <div className="sp-progress-bar" style={{ width: `${(currentTime / duration) * 100 || 0}%` }}>
-                            <div className="sp-progress-thumb"></div>
-                        </div>
-                    </div>
-                    <div className="sp-controls-row">
-                        <div className="sp-controls-left">
-                            <span className="sp-time">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                        </div>
-                        <div className="sp-controls-right">
-                            <button
-                                className="sp-control-btn-small sp-mobile-only"
-                                onClick={onToggleInfo}
-                                title="Toggle Info"
-                            >
-                                <Info size={16} />
-                            </button>
-                            <button
-                                className="sp-control-btn-small"
-                                onClick={toggleMute}
-                                title="Mute/Unmute"
-                            >
-                                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                            </button>
-                            <button
-                                className="sp-control-btn-small"
-                                onClick={onOpenSettings}
-                                title="Pengaturan"
-                            >
-                                <Settings size={16} />
-                            </button>
-                            <button className="sp-control-btn-small" onClick={toggleFullscreen}>
-                                <Maximize size={16} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  const handleInteraction = () => {
+    setShowControls(true)
+    if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current)
+    hideControlsTimeout.current = setTimeout(() => {
+      if (playing) setShowControls(false)
+    }, 5000)
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="sp-video-wrapper"
+      onMouseMove={handleInteraction}
+      onTouchStart={handleInteraction}
+    >
+      <video
+        ref={videoRef}
+        className="sp-video"
+        playsInline
+        poster={poster}
+        onClick={handleInteraction}
+      />
+      <div className={`sp-controls-overlay ${showControls ? 'visible' : ''}`}>
+        <div className="sp-center-controls">
+          <button className="sp-control-btn" onClick={(e) => { e.stopPropagation(); togglePlay(); }}>
+            {playing ? <Pause size={28} /> : <Play size={28} style={{ marginLeft: '3px' }} />}
+          </button>
         </div>
-    )
+
+        <div className="sp-bottom-controls" onClick={(e) => e.stopPropagation()}>
+          <div className="sp-progress-container" onClick={handleProgressClick}>
+            <div className="sp-progress-bar" style={{ width: `${(currentTime / duration) * 100 || 0}%` }}>
+              <div className="sp-progress-thumb"></div>
+            </div>
+          </div>
+          <div className="sp-controls-row">
+            <div className="sp-controls-left">
+              <span className="sp-time">{formatTime(currentTime)} / {formatTime(duration)}</span>
+            </div>
+            <div className="sp-controls-right">
+              <button
+                className={`sp-control-btn-small sp-mobile-only ${showInfo ? 'active' : ''}`}
+                onClick={onToggleInfo}
+                title="Toggle Info"
+              >
+                <Info size={16} />
+              </button>
+              <button
+                className="sp-control-btn-small"
+                onClick={toggleMute}
+                title="Mute/Unmute"
+              >
+                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <button
+                className="sp-control-btn-small"
+                onClick={onOpenSettings}
+                title="Pengaturan"
+              >
+                <Settings size={16} />
+              </button>
+              <button className="sp-control-btn-small" onClick={toggleFullscreen}>
+                <Maximize size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // --- EPISODE LIST COMPONENT ---
 function InternalEpisodeList({ episodes, currentEpisode, onEpisodeSelect }) {
-    const activeRef = useRef(null)
+  const activeRef = useRef(null)
 
-    useEffect(() => {
-        activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, [currentEpisode])
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [currentEpisode])
 
-    if (!episodes?.length) return <div style={{ padding: '40px', textAlign: 'center', color: '#666', fontSize: '14px' }}>Tidak ada episode</div>
+  if (!episodes?.length) return <div style={{ padding: '40px', textAlign: 'center', color: '#666', fontSize: '14px' }}>Tidak ada episode</div>
 
-    return (
-        <div className="sp-grid custom-scroll">
-            {episodes.map((item, idx) => {
-                const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
-                const isLocked = item.isLock
-                return (
-                    <button
-                        key={idx}
-                        ref={isActive ? activeRef : null}
-                        disabled={isLocked}
-                        onClick={() => onEpisodeSelect(item)}
-                        className={`sp-ep-btn ${isActive ? 'active' : ''}`}
-                    >
-                        {isActive && <div className="sp-active-indicator"></div>}
-                        {isLocked && <Lock size={14} color="rgba(255,255,255,0.3)" style={{ position: 'absolute', top: 6, right: 6 }} />}
-                        {item.episodeNo}
-                    </button>
-                )
-            })}
-        </div>
-    )
+  return (
+    <div className="sp-grid custom-scroll">
+      {episodes.map((item, idx) => {
+        const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
+        const isLocked = item.isLock
+        return (
+          <button
+            key={idx}
+            ref={isActive ? activeRef : null}
+            disabled={isLocked}
+            onClick={() => onEpisodeSelect(item)}
+            className={`sp-ep-btn ${isActive ? 'active' : ''}`}
+          >
+            {isActive && <div className="sp-active-indicator"></div>}
+            {isLocked && <Lock size={14} color="rgba(255,255,255,0.3)" style={{ position: 'absolute', top: 6, right: 6 }} />}
+            {item.episodeNo}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 // --- MOBILE POPUP COMPONENT ---
 function MobileEpisodePopup({ episodes, currentEpisode, onEpisodeSelect, onClose }) {
-    const activeRef = useRef(null)
+  const activeRef = useRef(null)
 
-    useEffect(() => {
-        activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, [currentEpisode])
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [currentEpisode])
 
-    if (!episodes?.length) return null
+  if (!episodes?.length) return null
 
-    return (
-        <div className="sp-popup-overlay" onClick={onClose}>
-            <div className="sp-popup-container" onClick={(e) => e.stopPropagation()}>
-                <div className="sp-popup-handle"></div>
-                <div className="sp-popup-header">
-                    <div className="sp-list-title">
-                        <List size={16} color="#3b82f6" />
-                        Episode
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span className="sp-count-badge">{episodes.length}</span>
-                        <button onClick={onClose} className="sp-btn-icon" style={{ width: '32px', height: '32px' }}>
-                            <X size={18} />
-                        </button>
-                    </div>
-                </div>
-                <div className="sp-popup-list custom-scroll">
-                    {episodes.map((item, idx) => {
-                        const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
-                        const isLocked = item.isLock
-                        return (
-                            <div
-                                key={idx}
-                                ref={isActive ? activeRef : null}
-                                className={`sp-popup-ep-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
-                                onClick={() => {
-                                    if (!isLocked) {
-                                        onEpisodeSelect(item)
-                                        onClose()
-                                    }
-                                }}
-                            >
-                                <div className="sp-popup-ep-number">
-                                    {isLocked ? (
-                                        <Lock size={20} color="rgba(255,255,255,0.4)" />
-                                    ) : (
-                                        <span>{item.episodeNo}</span>
-                                    )}
-                                </div>
-                                <div className="sp-popup-ep-info">
-                                    <div className="sp-popup-ep-title">
-                                        {item.title || `Episode ${item.episodeNo}`}
-                                    </div>
-                                    <div className="sp-popup-ep-meta">
-                                        {isActive && <span className="sp-popup-ep-badge">Sedang Diputar</span>}
-                                        {isLocked && <span>🔒 Terkunci</span>}
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })}
-                </div>
-            </div>
+  return (
+    <div className="sp-popup-overlay" onClick={onClose}>
+      <div className="sp-popup-container" onClick={(e) => e.stopPropagation()}>
+        <div className="sp-popup-handle"></div>
+        <div className="sp-popup-header">
+          <div className="sp-list-title">
+            <List size={16} color="#3b82f6" />
+            Episode
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="sp-count-badge">{episodes.length}</span>
+            <button onClick={onClose} className="sp-btn-icon" style={{ width: '32px', height: '32px' }}>
+              <X size={18} />
+            </button>
+          </div>
         </div>
-    )
+        <div className="sp-popup-list custom-scroll">
+          {episodes.map((item, idx) => {
+            const isActive = currentEpisode && item.chapterIndex === currentEpisode.chapterIndex
+            const isLocked = item.isLock
+            return (
+              <div
+                key={idx}
+                ref={isActive ? activeRef : null}
+                className={`sp-popup-ep-item ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
+                onClick={() => {
+                  if (!isLocked) {
+                    onEpisodeSelect(item)
+                    onClose()
+                  }
+                }}
+              >
+                <div className="sp-popup-ep-number">
+                  {isLocked ? (
+                    <Lock size={20} color="rgba(255,255,255,0.4)" />
+                  ) : (
+                    <span>{item.episodeNo}</span>
+                  )}
+                </div>
+                <div className="sp-popup-ep-info">
+                  <div className="sp-popup-ep-title">
+                    {item.title || `Episode ${item.episodeNo}`}
+                  </div>
+                  <div className="sp-popup-ep-meta">
+                    {isActive && <span className="sp-popup-ep-badge">Sedang Diputar</span>}
+                    {isLocked && <span>🔒 Terkunci</span>}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // --- MAIN PLAYER COMPONENT ---
 export default function Player() {
-    const { source, id: bookId } = useParams()
-    const navigate = useNavigate()
+  const { source, id: bookId } = useParams()
+  const navigate = useNavigate()
 
-    const [loading, setLoading] = useState(true)
-    const [detail, setDetail] = useState(null)
-    const [episodes, setEpisodes] = useState([])
-    const [currentEp, setCurrentEp] = useState(null)
-    const [streamUrl, setStreamUrl] = useState(null)
-    const [videoLoading, setVideoLoading] = useState(false)
-    const [error, setError] = useState(null)
-    const [showInfo, setShowInfo] = useState(true)
-    const [showMobilePopup, setShowMobilePopup] = useState(false)
-    const [showSettings, setShowSettings] = useState(false)
-    const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [detail, setDetail] = useState(null)
+  const [episodes, setEpisodes] = useState([])
+  const [currentEp, setCurrentEp] = useState(null)
+  const [streamUrl, setStreamUrl] = useState(null)
+  const [videoLoading, setVideoLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [showInfo, setShowInfo] = useState(false)
+  const [showMobilePopup, setShowMobilePopup] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [playbackSpeed, setPlaybackSpeed] = useState(1)
 
-    // Close settings when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (showSettings && !e.target.closest('.sp-settings-popup') && !e.target.closest('.sp-control-btn-small')) {
-                setShowSettings(false)
-            }
-        }
-        document.addEventListener('click', handleClickOutside)
-        return () => document.removeEventListener('click', handleClickOutside)
-    }, [showSettings])
-
-    useEffect(() => {
-        const init = async () => {
-            setLoading(true)
-            try {
-                if (source !== 'dramabos') throw new Error("Sumber tidak didukung")
-
-                const [d, c] = await Promise.all([
-                    getDramaBosDetail(bookId),
-                    getDramaBosChapters(bookId)
-                ])
-
-                console.log('=== DEBUG DETAIL DATA ===')
-                console.log('Raw response d:', d)
-                console.log('Type of d:', typeof d)
-                console.log('Is array?:', Array.isArray(d))
-                if (d) {
-                    console.log('d.cover:', d.cover)
-                    console.log('d.bookName:', d.bookName)
-                    console.log('Keys in d:', Object.keys(d))
-                }
-                console.log('========================')
-
-                if (!d) throw new Error("Gagal mengambil detail")
-                setDetail(d)
-
-                let processedEps = []
-                if (c && Array.isArray(c)) {
-                    processedEps = c.map((item, idx) => ({
-                        ...item,
-                        internalIndex: idx,
-                        title: item.chapterName || `Episode ${idx + 1}`,
-                        episodeNo: String(idx + 1),
-                        bestUrl: findBestQualityInCdnList(item.cdnList)
-                    })).sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
-                }
-                setEpisodes(processedEps)
-
-                if (processedEps.length > 0) playEpisode(processedEps[0])
-            } catch (err) {
-                setError(err.message)
-            } finally {
-                setLoading(false)
-            }
-        }
-        init()
-    }, [bookId, source])
-
-    const findBestQualityInCdnList = (cdnList) => {
-        if (!cdnList?.length) return null
-        for (const cdn of cdnList) {
-            if (cdn.videoPathList) {
-                const q1080 = cdn.videoPathList.find(v => v.quality === 1080)
-                if (q1080) return q1080.videoPath
-                const q720 = cdn.videoPathList.find(v => v.quality === 720)
-                if (q720) return q720.videoPath
-                const qDef = cdn.videoPathList.find(v => v.isDefault) || cdn.videoPathList[0]
-                if (qDef) return qDef.videoPath
-            }
-        }
-        return null
+  // Close settings when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showSettings && !e.target.closest('.sp-settings-popup') && !e.target.closest('.sp-control-btn-small')) {
+        setShowSettings(false)
+      }
     }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [showSettings])
 
-    const playEpisode = async (episode) => {
-        if (!episode) return
-        setCurrentEp(episode)
-        setVideoLoading(true)
-        setStreamUrl(null)
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true)
+      try {
+        if (source !== 'dramabos') throw new Error("Sumber tidak didukung")
 
-        try {
-            if (episode.bestUrl) {
-                setStreamUrl(episode.bestUrl)
-                setVideoLoading(false)
-                return
-            }
-            const targetIndex = (episode.chapterIndex !== undefined && episode.chapterIndex !== null)
-                ? episode.chapterIndex
-                : (episode.internalIndex + 1)
+        const [d, c] = await Promise.all([
+          getDramaBosDetail(bookId),
+          getDramaBosChapters(bookId)
+        ])
 
-            const url = await getDramaBosStream(bookId, targetIndex)
-            if (url) {
-                setStreamUrl(url)
-            } else if (episode.internalIndex === 0 && detail?.videoPath) {
-                setStreamUrl(detail.videoPath)
-            }
-        } catch (e) {
-            console.error(e)
-        } finally {
-            setVideoLoading(false)
+        console.log('=== DEBUG DETAIL DATA ===')
+        console.log('Raw response d:', d)
+        console.log('Type of d:', typeof d)
+        console.log('Is array?:', Array.isArray(d))
+        if (d) {
+          console.log('d.cover:', d.cover)
+          console.log('d.bookName:', d.bookName)
+          console.log('Keys in d:', Object.keys(d))
         }
-    }
+        console.log('========================')
 
-    const handleNext = () => {
-        if (!episodes || !currentEp) return
-        const currentIdx = episodes.findIndex(e => e.chapterIndex === currentEp.chapterIndex)
-        if (currentIdx >= 0 && currentIdx < episodes.length - 1) {
-            playEpisode(episodes[currentIdx + 1])
+        if (!d) throw new Error("Gagal mengambil detail")
+
+        // If cover is empty, try to fetch from list APIs as fallback
+        if (!d.cover || d.cover.trim() === '') {
+          console.log('Cover empty, fetching from list APIs...')
+          try {
+            const [foryou, newList, rank] = await Promise.all([
+              getDramaBosForYou(1),
+              getDramaBosNew(1),
+              getDramaBosRank(1)
+            ])
+
+            const allList = [...(foryou || []), ...(newList || []), ...(rank || [])]
+            const found = allList.find(item => item.bookId === bookId)
+
+            if (found && found.cover && found.cover.trim() !== '') {
+              console.log('Found cover from list:', found.cover)
+              d.cover = found.cover
+            }
+          } catch (listErr) {
+            console.warn('Failed to fetch cover from lists:', listErr)
+          }
         }
+
+        setDetail(d)
+
+        let processedEps = []
+        if (c && Array.isArray(c)) {
+          processedEps = c.map((item, idx) => ({
+            ...item,
+            internalIndex: idx,
+            title: item.chapterName || `Episode ${idx + 1}`,
+            episodeNo: String(idx + 1),
+            bestUrl: findBestQualityInCdnList(item.cdnList)
+          })).sort((a, b) => (a.chapterIndex || 0) - (b.chapterIndex || 0))
+        }
+        setEpisodes(processedEps)
+
+        if (processedEps.length > 0) playEpisode(processedEps[0])
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
     }
+    init()
+  }, [bookId, source])
 
-    if (loading && !detail) return (
-        <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="sp-spinner"></div>
-        </div>
-    )
+  const findBestQualityInCdnList = (cdnList) => {
+    if (!cdnList?.length) return null
+    for (const cdn of cdnList) {
+      if (cdn.videoPathList) {
+        const q1080 = cdn.videoPathList.find(v => v.quality === 1080)
+        if (q1080) return q1080.videoPath
+        const q720 = cdn.videoPathList.find(v => v.quality === 720)
+        if (q720) return q720.videoPath
+        const qDef = cdn.videoPathList.find(v => v.isDefault) || cdn.videoPathList[0]
+        if (qDef) return qDef.videoPath
+      }
+    }
+    return null
+  }
 
-    if (error) return (
-        <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', marginBottom: '20px' }}>{error}</div>
-            <button onClick={() => navigate('/')} className="sp-btn-primary" style={{ padding: '12px 24px', borderRadius: '8px' }}>Kembali</button>
-        </div>
-    )
+  const playEpisode = async (episode) => {
+    if (!episode) return
+    setCurrentEp(episode)
+    setVideoLoading(true)
+    setStreamUrl(null)
 
-    return (
-        <>
-            <style>{INTERNAL_STYLES}</style>
+    try {
+      if (episode.bestUrl) {
+        setStreamUrl(episode.bestUrl)
+        setVideoLoading(false)
+        return
+      }
+      const targetIndex = (episode.chapterIndex !== undefined && episode.chapterIndex !== null)
+        ? episode.chapterIndex
+        : (episode.internalIndex + 1)
 
-            <div className="sp-container">
-                <header className="sp-header">
-                    <button onClick={() => navigate(-1)} className="sp-btn-icon">
-                        <ArrowLeft size={20} />
-                    </button>
-                    <div className="sp-title-area">
-                        <div className="sp-title">{detail?.bookName}</div>
-                        <div className="sp-subtitle">EP.{currentEp?.episodeNo || '...'}</div>
-                    </div>
-                    <div style={{ width: '40px' }}></div>
-                </header>
+      const url = await getDramaBosStream(bookId, targetIndex)
+      if (url) {
+        setStreamUrl(url)
+      } else if (episode.internalIndex === 0 && detail?.videoPath) {
+        setStreamUrl(detail.videoPath)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setVideoLoading(false)
+    }
+  }
 
-                <div className="sp-main">
-                    <div className="sp-video-section">
-                        <div className="sp-video-container">
-                            {streamUrl ? (
-                                <InternalVideoPlayer
-                                    key={streamUrl}
-                                    src={streamUrl}
-                                    poster={detail?.cover}
-                                    onEnded={handleNext}
-                                    onToggleInfo={() => setShowInfo(!showInfo)}
-                                    showInfo={showInfo}
-                                    playbackRate={playbackSpeed}
-                                    onOpenSettings={() => setShowSettings(!showSettings)}
-                                />
-                            ) : (
-                                <div className="sp-loading-overlay">
-                                    {videoLoading ? (
-                                        <>
-                                            <div className="sp-spinner"></div>
-                                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: '12px' }}>Memuat video...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <MonitorPlay size={48} opacity={0.3} />
-                                            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: '12px' }}>Video tidak tersedia</span>
-                                        </>
-                                    )}
-                                </div>
-                            )}
+  const handleNext = () => {
+    if (!episodes || !currentEp) return
+    const currentIdx = episodes.findIndex(e => e.chapterIndex === currentEp.chapterIndex)
+    if (currentIdx >= 0 && currentIdx < episodes.length - 1) {
+      playEpisode(episodes[currentIdx + 1])
+    }
+  }
 
-                            {/* SETTINGS POPUP */}
-                            {showSettings && (
-                                <div className="sp-settings-popup">
-                                    <div className="sp-settings-header">Kecepatan</div>
-                                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
-                                        <div
-                                            key={speed}
-                                            className={`sp-settings-item ${playbackSpeed === speed ? 'active' : ''}`}
-                                            onClick={() => {
-                                                setPlaybackSpeed(speed)
-                                                setShowSettings(false)
-                                            }}
-                                        >
-                                            <span>{speed === 1 ? 'Normal' : `${speed}x`}</span>
-                                            {playbackSpeed === speed && <span className="sp-settings-value">✓</span>}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+  if (loading && !detail) return (
+    <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="sp-spinner"></div>
+    </div>
+  )
 
-                        {/* MOBILE INFO */}
-                        <div className={`sp-info-mobile ${!showInfo ? 'hidden' : ''}`}>
-                            <div className="sp-info-header">
-                                {detail?.cover && detail.cover.trim() !== '' ? (
-                                    <img
-                                        src={detail.cover}
-                                        className="sp-info-mobile-cover"
-                                        alt={detail?.bookName || ''}
-                                        crossOrigin="anonymous"
-                                        referrerPolicy="no-referrer"
-                                        onError={(e) => {
-                                            console.error('Mobile cover failed to load:', detail.cover)
-                                            e.target.style.display = 'none'
-                                        }}
-                                    />
-                                ) : (
-                                    <div className="sp-info-mobile-cover" style={{
-                                        background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.3))',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '24px',
-                                        fontWeight: '700',
-                                        color: 'rgba(255,255,255,0.5)'
-                                    }}>
-                                        {detail?.bookName?.charAt(0) || '?'}
-                                    </div>
-                                )}
-                                <div className="sp-info-header-content">
-                                    <div className="sp-info-title">{detail?.bookName}</div>
-                                    <div className="sp-tags">
-                                        <span className="sp-tag">EP {currentEp?.episodeNo}</span>
-                                        {detail?.tags?.slice(0, 2).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
-                                    </div>
-                                </div>
-                                <button className="sp-info-toggle-btn" onClick={() => setShowInfo(!showInfo)}>
-                                    {showInfo ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                                </button>
-                            </div>
-                            <div className="sp-synopsis">
-                                {detail?.introduction || 'Deskripsi tidak tersedia'}
-                            </div>
-                            <div className="sp-info-actions">
-                                <button className="sp-btn-action sp-btn-primary" onClick={() => setShowMobilePopup(true)}>
-                                    <List size={18} />
-                                    Daftar Episode
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+  if (error) return (
+    <div style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
+      <div style={{ fontSize: '18px', marginBottom: '20px' }}>{error}</div>
+      <button onClick={() => navigate('/')} className="sp-btn-primary" style={{ padding: '12px 24px', borderRadius: '8px' }}>Kembali</button>
+    </div>
+  )
 
-                    {/* DESKTOP SIDEBAR */}
-                    <div className="sp-sidebar">
-                        {/* INFO SECTION */}
-                        <div className="sp-sidebar-info">
-                            {detail?.cover && detail.cover.trim() !== '' ? (
-                                <img
-                                    src={detail.cover}
-                                    className="sp-sidebar-cover"
-                                    alt={detail?.bookName || ''}
-                                    crossOrigin="anonymous"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                        console.error('Desktop cover failed to load:', detail.cover)
-                                        e.target.style.display = 'none'
-                                    }}
-                                />
-                            ) : (
-                                <div className="sp-sidebar-cover" style={{
-                                    background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.3))',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '36px',
-                                    fontWeight: '700',
-                                    color: 'rgba(255,255,255,0.5)'
-                                }}>
-                                    {detail?.bookName?.charAt(0) || '?'}
-                                </div>
-                            )}
-                            <div className="sp-sidebar-info-content">
-                                <div className="sp-sidebar-title">{detail?.bookName}</div>
-                                <div className="sp-tags" style={{ marginBottom: '8px' }}>
-                                    <span className="sp-tag">EP {currentEp?.episodeNo}</span>
-                                    {detail?.tags?.slice(0, 2).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
-                                </div>
-                                <div className="sp-sidebar-synopsis">
-                                    {detail?.introduction || 'Deskripsi tidak tersedia'}
-                                </div>
-                            </div>
-                        </div>
+  return (
+    <>
+      <style>{INTERNAL_STYLES}</style>
 
-                        {/* EPISODE LIST */}
-                        <div className="sp-list-header">
-                            <div className="sp-list-title">
-                                <List size={18} color="#3b82f6" />
-                                Episode
-                            </div>
-                            <span className="sp-count-badge">{episodes.length}</span>
-                        </div>
-                        <InternalEpisodeList
-                            episodes={episodes}
-                            currentEpisode={currentEp}
-                            onEpisodeSelect={(ep) => playEpisode(ep)}
-                        />
-                    </div>
+      <div className="sp-container">
+        <header className="sp-header">
+          <button onClick={() => navigate(-1)} className="sp-btn-icon">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="sp-title-area">
+            <div className="sp-title">{detail?.bookName}</div>
+            <div className="sp-subtitle">EP.{currentEp?.episodeNo || '...'}</div>
+          </div>
+          <div style={{ width: '40px' }}></div>
+        </header>
+
+        <div className="sp-main">
+          <div className="sp-video-section">
+            <div className="sp-video-container">
+              {streamUrl ? (
+                <InternalVideoPlayer
+                  key={streamUrl}
+                  src={streamUrl}
+                  poster={detail?.cover}
+                  onEnded={handleNext}
+                  onToggleInfo={() => setShowInfo(!showInfo)}
+                  showInfo={showInfo}
+                  playbackRate={playbackSpeed}
+                  onOpenSettings={() => setShowSettings(!showSettings)}
+                />
+              ) : (
+                <div className="sp-loading-overlay">
+                  {videoLoading ? (
+                    <>
+                      <div className="sp-spinner"></div>
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: '12px' }}>Memuat video...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MonitorPlay size={48} opacity={0.3} />
+                      <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: '12px' }}>Video tidak tersedia</span>
+                    </>
+                  )}
                 </div>
+              )}
 
-                {/* MOBILE POPUP */}
-                {showMobilePopup && (
-                    <MobileEpisodePopup
-                        episodes={episodes}
-                        currentEpisode={currentEp}
-                        onEpisodeSelect={(ep) => playEpisode(ep)}
-                        onClose={() => setShowMobilePopup(false)}
-                    />
-                )}
+              {/* SETTINGS POPUP */}
+              {showSettings && (
+                <div className="sp-settings-popup">
+                  <div className="sp-settings-header">Kecepatan</div>
+                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
+                    <div
+                      key={speed}
+                      className={`sp-settings-item ${playbackSpeed === speed ? 'active' : ''}`}
+                      onClick={() => {
+                        setPlaybackSpeed(speed)
+                        setShowSettings(false)
+                      }}
+                    >
+                      <span>{speed === 1 ? 'Normal' : `${speed}x`}</span>
+                      {playbackSpeed === speed && <span className="sp-settings-value">✓</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-        </>
-    )
+
+            {/* MOBILE INFO */}
+            <div className={`sp-info-mobile ${!showInfo ? 'hidden' : ''}`}>
+              <div className="sp-info-header">
+                <div
+                  className="sp-info-mobile-cover"
+                  style={{
+                    background: detail?.cover && detail.cover.trim() !== ''
+                      ? `url(${detail.cover}) center/cover no-repeat`
+                      : 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.3))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    color: detail?.cover && detail.cover.trim() !== '' ? 'transparent' : 'rgba(255,255,255,0.5)'
+                  }}
+                >
+                  {(!detail?.cover || detail.cover.trim() === '') && (detail?.bookName?.charAt(0) || '?')}
+                </div>
+                <div className="sp-info-header-content">
+                  <div className="sp-info-title">{detail?.bookName}</div>
+                  <div className="sp-tags">
+                    <span className="sp-tag">EP {currentEp?.episodeNo}</span>
+                    {detail?.tags?.slice(0, 2).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
+                  </div>
+                </div>
+                <button className="sp-info-toggle-btn" onClick={() => setShowInfo(!showInfo)}>
+                  {showInfo ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                </button>
+              </div>
+              <div className="sp-synopsis">
+                {detail?.introduction || 'Deskripsi tidak tersedia'}
+              </div>
+              <div className="sp-info-actions">
+                <button className="sp-btn-action sp-btn-primary" onClick={() => setShowMobilePopup(true)}>
+                  <List size={18} />
+                  Daftar Episode
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* DESKTOP SIDEBAR */}
+          <div className="sp-sidebar">
+            {/* INFO SECTION */}
+            <div className="sp-sidebar-info">
+              <div
+                className="sp-sidebar-cover"
+                style={{
+                  background: detail?.cover && detail.cover.trim() !== ''
+                    ? `url(${detail.cover}) center/cover no-repeat`
+                    : 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(37,99,235,0.3))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '36px',
+                  fontWeight: '700',
+                  color: detail?.cover && detail.cover.trim() !== '' ? 'transparent' : 'rgba(255,255,255,0.5)'
+                }}
+              >
+                {(!detail?.cover || detail.cover.trim() === '') && (detail?.bookName?.charAt(0) || '?')}
+              </div>
+              <div className="sp-sidebar-info-content">
+                <div className="sp-sidebar-title">{detail?.bookName}</div>
+                <div className="sp-tags" style={{ marginBottom: '8px' }}>
+                  <span className="sp-tag">EP {currentEp?.episodeNo}</span>
+                  {detail?.tags?.slice(0, 2).map((t, i) => <span key={i} className="sp-tag">{t}</span>)}
+                </div>
+                <div className="sp-sidebar-synopsis">
+                  {detail?.introduction || 'Deskripsi tidak tersedia'}
+                </div>
+              </div>
+            </div>
+
+            {/* EPISODE LIST */}
+            <div className="sp-list-header">
+              <div className="sp-list-title">
+                <List size={18} color="#3b82f6" />
+                Episode
+              </div>
+              <span className="sp-count-badge">{episodes.length}</span>
+            </div>
+            <InternalEpisodeList
+              episodes={episodes}
+              currentEpisode={currentEp}
+              onEpisodeSelect={(ep) => playEpisode(ep)}
+            />
+          </div>
+        </div>
+
+        {/* MOBILE POPUP */}
+        {showMobilePopup && (
+          <MobileEpisodePopup
+            episodes={episodes}
+            currentEpisode={currentEp}
+            onEpisodeSelect={(ep) => playEpisode(ep)}
+            onClose={() => setShowMobilePopup(false)}
+          />
+        )}
+      </div>
+    </>
+  )
 }
